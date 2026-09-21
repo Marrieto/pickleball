@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
-import { computeStandings } from './standings';
-import type { Player, Round } from './types';
+import { computeStandings, rankStandings } from './standings';
+import type { Player, PlayerStanding, Round } from './types';
 
 function player(id: string, name = id): Player {
 	return { id, name, active: true };
@@ -171,5 +171,42 @@ describe('computeStandings - fairness (sit-outs and adjusted score)', () => {
 		const standings = computeStandings(players, rounds);
 
 		expect(standings.find((s) => s.id === 'A')?.adjustedScore).toBe(0);
+	});
+});
+
+function standing(overrides: Partial<PlayerStanding> & { id: string }): PlayerStanding {
+	return {
+		gamesPlayed: 0,
+		totalPoints: 0,
+		wins: 0,
+		roundsSincePlayed: 0,
+		timesSatOut: 0,
+		adjustedScore: 0,
+		benched: false,
+		...overrides
+	};
+}
+
+describe('rankStandings', () => {
+	test('ranks by total points first', () => {
+		const standings = [
+			standing({ id: 'A', totalPoints: 20, adjustedScore: 5 }),
+			standing({ id: 'B', totalPoints: 30, adjustedScore: 3 })
+		];
+
+		const ranked = rankStandings(standings);
+
+		expect(ranked.map((s) => s.id)).toEqual(['B', 'A']);
+	});
+
+	test('breaks a tie in total points using the higher adjusted score', () => {
+		const standings = [
+			standing({ id: 'Waitman', totalPoints: 41, adjustedScore: 6.8 }),
+			standing({ id: 'Four', totalPoints: 41, adjustedScore: 5.9 })
+		];
+
+		const ranked = rankStandings(standings);
+
+		expect(ranked.map((s) => s.id)).toEqual(['Waitman', 'Four']);
 	});
 });

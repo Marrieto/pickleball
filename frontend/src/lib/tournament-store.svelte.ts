@@ -7,10 +7,11 @@ import {
 	goToRound as goToRoundAction,
 	recordScore as recordScoreAction,
 	removePlayer as removePlayerAction,
+	setCourtLabel as setCourtLabelAction,
 	togglePendingBench as togglePendingBenchAction,
 	undoLastAction as undoLastActionAction
 } from './tournament-actions';
-import { computeStandings } from './standings';
+import { computeStandings, rankStandings } from './standings';
 import type { PlayerStanding, Round, Tournament, TournamentActionsState } from './types';
 
 const TOURNAMENT_KEY = 'americano:tournament';
@@ -35,9 +36,7 @@ class TournamentStore {
 		if (!t) return [];
 		const active = t.players.filter((p) => p.active);
 		const history = t.roundIds.map((id) => this.round(id)!);
-		return computeStandings(active, history).sort(
-			(a, b) => b.totalPoints - a.totalPoints
-		);
+		return rankStandings(computeStandings(active, history));
 	}
 
 	round(id: string): Round | undefined {
@@ -102,6 +101,11 @@ class TournamentStore {
 	togglePendingBench(id: string) {
 		if (!this.tournament) return;
 		this.tournamentState.current = togglePendingBenchAction(this.tournament, id);
+	}
+
+	setCourtLabel(court: number, side: 'teamA' | 'teamB', label: string) {
+		if (!this.tournament) return;
+		this.tournamentState.current = setCourtLabelAction(this.tournament, court, side, label);
 	}
 
 	generateNextRound() {

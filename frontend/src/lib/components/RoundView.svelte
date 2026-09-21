@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { tournamentStore } from '$lib/tournament-store.svelte';
 	import MatchCard from './MatchCard.svelte';
+	import CourtBackdrop from './CourtBackdrop.svelte';
+	import NetZone from './NetZone.svelte';
 	import type { CourtMatch } from '$lib/types';
 
 	let tournament = $derived(tournamentStore.tournament!);
@@ -103,33 +105,48 @@
 			{#each round.courts as match (round.id + '-' + match.court)}
 				{#if editing}
 					<div class="card match editable">
-						<div class="court-label">Court {match.court}</div>
-						<div class="editable-team">
-							{#each match.teamA as id (id)}
-								<button
-									class="chip"
-									class:selected={selected === id}
-									onclick={() => selectPlayer(id)}
-								>
-									{playerName(id)}
-								</button>
-							{/each}
-						</div>
-						<div class="divider">vs</div>
-						<div class="editable-team">
-							{#each match.teamB as id (id)}
-								<button
-									class="chip"
-									class:selected={selected === id}
-									onclick={() => selectPlayer(id)}
-								>
-									{playerName(id)}
-								</button>
-							{/each}
+						<CourtBackdrop />
+						<div class="content">
+							<div class="court-label">Court {match.court}</div>
+							{#if tournament.courtLabels[match.court]?.teamA}
+								<div class="side-label">{tournament.courtLabels[match.court]?.teamA}</div>
+							{/if}
+							<div class="editable-team">
+								{#each match.teamA as id (id)}
+									<button
+										class="chip"
+										class:selected={selected === id}
+										onclick={() => selectPlayer(id)}
+									>
+										{playerName(id)}
+									</button>
+								{/each}
+							</div>
+							<NetZone />
+							{#if tournament.courtLabels[match.court]?.teamB}
+								<div class="side-label">{tournament.courtLabels[match.court]?.teamB}</div>
+							{/if}
+							<div class="editable-team">
+								{#each match.teamB as id (id)}
+									<button
+										class="chip"
+										class:selected={selected === id}
+										onclick={() => selectPlayer(id)}
+									>
+										{playerName(id)}
+									</button>
+								{/each}
+							</div>
 						</div>
 					</div>
 				{:else}
-					<MatchCard {match} roundId={round.id} maxScore={tournament.targetScore} {playerName} />
+					<MatchCard
+						{match}
+						roundId={round.id}
+						maxScore={tournament.targetScore}
+						{playerName}
+						sideLabels={tournament.courtLabels[match.court] ?? {}}
+					/>
 				{/if}
 			{/each}
 		</div>
@@ -206,17 +223,32 @@
 		grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 	}
 	.match.editable {
-		padding: 1rem;
+		position: relative;
+		overflow: hidden;
+		padding: 1.75rem 1.25rem;
+	}
+	.match.editable .content {
+		position: relative;
+		z-index: 1;
 		display: flex;
 		flex-direction: column;
-		gap: 0.5rem;
+		gap: 1.25rem;
 	}
 	.court-label {
 		font-size: 0.75rem;
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.04em;
-		color: var(--text-muted);
+		color: #ffffff;
+		text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+	}
+	.side-label {
+		font-size: 0.7rem;
+		color: #ffffff;
+		text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+		text-transform: uppercase;
+		letter-spacing: 0.03em;
+		margin-top: -0.35rem;
 	}
 	.editable-team {
 		display: flex;
@@ -227,17 +259,12 @@
 		padding: 0.6rem;
 		border-radius: 10px;
 		border: 1px solid var(--border);
-		background: var(--bg);
+		background: var(--court-panel);
 		color: var(--text);
 	}
 	.chip.selected {
 		border-color: var(--primary);
-		background: color-mix(in srgb, var(--primary) 20%, var(--surface));
-	}
-	.divider {
-		text-align: center;
-		font-size: 0.75rem;
-		color: var(--text-muted);
+		background: color-mix(in srgb, var(--primary) 20%, var(--court-panel));
 	}
 	.generate {
 		align-self: center;

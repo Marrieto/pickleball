@@ -7,6 +7,7 @@ import {
 	goToRound,
 	recordScore,
 	removePlayer,
+	setCourtLabel,
 	togglePendingBench,
 	undoLastAction
 } from './tournament-actions';
@@ -144,6 +145,36 @@ describe('editRoundAssignment', () => {
 		const next = editRoundAssignment(state, roundId, 1, ['x', 'y'], ['z', 'w']);
 
 		expect(next.rounds[roundId].courts[0]).toEqual(before);
+	});
+});
+
+describe('setCourtLabel', () => {
+	test('sets a label for one side of one court, leaving other courts/sides untouched', () => {
+		let tournament = createTournament('T', 2, 8);
+
+		tournament = setCourtLabel(tournament, 1, 'teamA', 'Glasvägg');
+
+		expect(tournament.courtLabels[1]?.teamA).toBe('Glasvägg');
+		expect(tournament.courtLabels[1]?.teamB).toBeUndefined();
+		expect(tournament.courtLabels[2]).toBeUndefined();
+	});
+
+	test('a court can have independent labels for each side', () => {
+		let tournament = createTournament('T', 1, 8);
+
+		tournament = setCourtLabel(tournament, 1, 'teamA', 'Glasvägg');
+		tournament = setCourtLabel(tournament, 1, 'teamB', 'Betongvägg');
+
+		expect(tournament.courtLabels[1]).toEqual({ teamA: 'Glasvägg', teamB: 'Betongvägg' });
+	});
+
+	test('setting an empty or whitespace-only label clears it, keeping labels optional', () => {
+		let tournament = createTournament('T', 1, 8);
+		tournament = setCourtLabel(tournament, 1, 'teamA', 'Glasvägg');
+
+		tournament = setCourtLabel(tournament, 1, 'teamA', '   ');
+
+		expect(tournament.courtLabels[1]?.teamA).toBeUndefined();
 	});
 });
 

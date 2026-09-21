@@ -47,3 +47,11 @@ export function computeStandings(players: Player[], rounds: Round[]): PlayerStan
 		};
 	});
 }
+
+/** Ranks by total points, breaking ties with the higher adjusted (per-game) score. */
+export function rankStandings(standings: PlayerStanding[]): PlayerStanding[] {
+	return [...standings].sort((a, b) => {
+		if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
+		return b.adjustedScore - a.adjustedScore;
+	});
+}

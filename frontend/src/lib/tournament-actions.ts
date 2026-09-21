@@ -14,7 +14,24 @@ export function createTournament(name: string, courtCount: number, targetScore: 
 		currentRoundIndex: -1,
 		pendingBenchIds: [],
 		settings: { darkMode: false },
+		courtLabels: {},
 		createdAt: Date.now()
+	};
+}
+
+export function setCourtLabel(
+	tournament: Tournament,
+	court: number,
+	side: 'teamA' | 'teamB',
+	label: string
+): Tournament {
+	const trimmed = label.trim();
+	const existing = tournament.courtLabels[court] ?? {};
+	const updated = { ...existing, [side]: trimmed || undefined };
+
+	return {
+		...tournament,
+		courtLabels: { ...tournament.courtLabels, [court]: updated }
 	};
 }
 

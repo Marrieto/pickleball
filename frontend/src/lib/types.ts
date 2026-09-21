@@ -49,6 +49,12 @@ export interface TournamentSettings {
 	darkMode: boolean;
 }
 
+/** A physical side of a numbered court (e.g. "glasvägg"/"betongvägg") - stable across rounds, independent of which team plays there. */
+export interface CourtSideLabels {
+	teamA?: string;
+	teamB?: string;
+}
+
 export type LastAction =
 	| { type: 'score'; roundId: string; court: number; previousScore: MatchScore | undefined }
 	| { type: 'round'; roundId: string };
@@ -63,6 +69,7 @@ export interface Tournament {
 	currentRoundIndex: number;
 	pendingBenchIds: string[];
 	settings: TournamentSettings;
+	courtLabels: Record<number, CourtSideLabels>;
 	lastAction?: LastAction;
 	createdAt: number;
 }
