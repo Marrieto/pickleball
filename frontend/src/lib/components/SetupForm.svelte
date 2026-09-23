@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { tournamentStore } from '$lib/tournament-store.svelte';
-	import type { FinalRoundPairingStyle, PairingFormat, ScoringMode } from '$lib/types';
+	import type { PairingFormat, ScoringMode } from '$lib/types';
 
 	const SCORE_DEFAULTS: Record<ScoringMode, { default: number; min: number; max: number }> = {
 		firstTo: { default: 11, min: 2, max: 15 },
@@ -12,7 +12,6 @@
 	let pairingFormat = $state<PairingFormat>('mexicano');
 	let scoringMode = $state<ScoringMode>('firstTo');
 	let targetScore = $state(SCORE_DEFAULTS.firstTo.default);
-	let finalRoundPairingStyle = $state<FinalRoundPairingStyle>('standard');
 
 	function onScoringModeChange(mode: ScoringMode) {
 		scoringMode = mode;
@@ -23,8 +22,7 @@
 		e.preventDefault();
 		tournamentStore.startTournament(name.trim() || 'Tournament', courtCount, targetScore, {
 			pairingFormat,
-			scoringMode,
-			finalRoundPairingStyle
+			scoringMode
 		});
 	}
 </script>
@@ -93,18 +91,6 @@
 			/>
 		</label>
 	</div>
-
-	<fieldset>
-		<legend>Final round pairing (default, changeable when generated)</legend>
-		<label class="choice">
-			<input type="radio" bind:group={finalRoundPairingStyle} value="standard" />
-			Standard (1st+4th vs 2nd+3rd)
-		</label>
-		<label class="choice">
-			<input type="radio" bind:group={finalRoundPairingStyle} value="alternate" />
-			Alternate (1st+3rd vs 2nd+4th)
-		</label>
-	</fieldset>
 
 	<button type="submit" class="primary">Start tournament</button>
 </form>
