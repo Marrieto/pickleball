@@ -14,7 +14,7 @@ import {
 } from './tournament-actions';
 import { computeStandings, rankStandings } from './standings';
 import type {
-	FinalRoundPairingStyle,
+	PairingStyle,
 	PlayerStanding,
 	Round,
 	Tournament,
@@ -26,7 +26,7 @@ const DEFAULT_SETTINGS: TournamentSettings = {
 	darkMode: false,
 	pairingFormat: 'mexicano',
 	scoringMode: 'firstTo',
-	finalRoundPairingStyle: 'standard'
+	pairingStyle: 'standard'
 };
 
 const TOURNAMENT_KEY = 'americano:tournament';
@@ -138,7 +138,7 @@ class TournamentStore {
 		this.apply(result, t.roundIds);
 	}
 
-	generateFinalRound(pairingStyle: FinalRoundPairingStyle) {
+	generateFinalRound(pairingStyle: PairingStyle) {
 		const t = this.tournament;
 		if (!t) return;
 		const result = generateFinalRoundAction({ tournament: t, rounds: this.collectRounds(t) }, pairingStyle);

@@ -76,6 +76,22 @@ describe('generateRound - rank grouping and pairing', () => {
 	});
 });
 
+describe('generateRound - mexicano pairingStyle option', () => {
+	test('pairingStyle "alternate" pairs 1st+3rd vs 2nd+4th instead of the default 1st+4th vs 2nd+3rd', () => {
+		const standings = [
+			player({ id: 'P1', totalPoints: 40 }),
+			player({ id: 'P2', totalPoints: 30 }),
+			player({ id: 'P3', totalPoints: 20 }),
+			player({ id: 'P4', totalPoints: 10 })
+		];
+
+		const plan = generateRound(standings, 1, { pairingStyle: 'alternate' });
+
+		expect(new Set(plan.courts[0].teamA)).toEqual(new Set(['P1', 'P3']));
+		expect(new Set(plan.courts[0].teamB)).toEqual(new Set(['P2', 'P4']));
+	});
+});
+
 describe('generateRound - not enough players for every court', () => {
 	test('falls back to fewer courts instead of forcing an uneven group', () => {
 		const standings = [

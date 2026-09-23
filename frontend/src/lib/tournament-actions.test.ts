@@ -38,19 +38,19 @@ describe('createTournament', () => {
 
 		expect(tournament.settings.pairingFormat).toBe('mexicano');
 		expect(tournament.settings.scoringMode).toBe('firstTo');
-		expect(tournament.settings.finalRoundPairingStyle).toBe('standard');
+		expect(tournament.settings.pairingStyle).toBe('standard');
 	});
 
 	test('honors settings overrides', () => {
 		const tournament = createTournament('T', 1, 21, {
 			pairingFormat: 'americano',
 			scoringMode: 'bestOf',
-			finalRoundPairingStyle: 'alternate'
+			pairingStyle: 'alternate'
 		});
 
 		expect(tournament.settings.pairingFormat).toBe('americano');
 		expect(tournament.settings.scoringMode).toBe('bestOf');
-		expect(tournament.settings.finalRoundPairingStyle).toBe('alternate');
+		expect(tournament.settings.pairingStyle).toBe('alternate');
 	});
 });
 
@@ -142,6 +142,46 @@ describe('generateNextRound - americano format wiring', () => {
 		]);
 
 		expect(round2Pairs.some((pair) => round1Pairs.includes(pair))).toBe(false);
+	});
+});
+
+describe('generateNextRound - mexicano pairingStyle wiring', () => {
+	test('honors tournament.settings.pairingStyle for normal Mexicano rounds', () => {
+		let state = withPlayers(4, 1);
+		const [p0, p1, p2, p3] = state.tournament.players.map((p) => p.id);
+
+		// Fabricate history giving each player a distinct total: p0=14, p1=10, p2=4, p3=0.
+		state.rounds = {
+			r1: {
+				id: 'r1',
+				roundNumber: 1,
+				courts: [{ court: 1, teamA: [p0, p1], teamB: [p2, p3], score: { teamAPoints: 10, teamBPoints: 0 } }],
+				sittingOut: [],
+				benchedPlayerIds: [],
+				createdAt: 0
+			},
+			r2: {
+				id: 'r2',
+				roundNumber: 2,
+				courts: [{ court: 1, teamA: [p0, p2], teamB: [p1, p3], score: { teamAPoints: 4, teamBPoints: 0 } }],
+				sittingOut: [],
+				benchedPlayerIds: [],
+				createdAt: 0
+			}
+		};
+		state.tournament = {
+			...state.tournament,
+			roundIds: ['r1', 'r2'],
+			currentRoundIndex: 1,
+			settings: { ...state.tournament.settings, pairingStyle: 'alternate' }
+		};
+
+		const next = generateNextRound(state);
+		const court = next.rounds[next.tournament.roundIds[2]].courts[0];
+
+		// Ranking is p0(14) > p1(10) > p2(4) > p3(0). alternate = 1st+3rd vs 2nd+4th.
+		expect(new Set(court.teamA)).toEqual(new Set([p0, p2]));
+		expect(new Set(court.teamB)).toEqual(new Set([p1, p3]));
 	});
 });
 

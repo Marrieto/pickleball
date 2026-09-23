@@ -1,7 +1,7 @@
 import { rankStandings } from './standings';
 import type {
 	CourtMatch,
-	FinalRoundPairingStyle,
+	PairingStyle,
 	PairingFormat,
 	PlayerStanding,
 	Round,
@@ -64,7 +64,7 @@ function selectEligiblePlayers(
 
 function buildTeams(
 	group: [PlayerStanding, PlayerStanding, PlayerStanding, PlayerStanding],
-	style: FinalRoundPairingStyle,
+	style: PairingStyle,
 	courtNumber: number
 ): CourtMatch {
 	const [first, second, third, fourth] = group;
@@ -81,8 +81,8 @@ function buildTeams(
 	return { court: courtNumber, teamA, teamB };
 }
 
-/** Mexicano: rank-sorted groups of 4, seeded 1st+4th vs 2nd+3rd. */
-function pairByRank(players: PlayerStanding[]): CourtMatch[] {
+/** Mexicano: rank-sorted groups of 4, split into teams per the given style. */
+function pairByRank(players: PlayerStanding[], style: PairingStyle): CourtMatch[] {
 	const byStanding = [...players].sort((a, b) => b.totalPoints - a.totalPoints);
 
 	const courts: CourtMatch[] = [];
@@ -93,7 +93,7 @@ function pairByRank(players: PlayerStanding[]): CourtMatch[] {
 			PlayerStanding,
 			PlayerStanding
 		];
-		courts.push(buildTeams(group, 'standard', courts.length + 1));
+		courts.push(buildTeams(group, style, courts.length + 1));
 	}
 	return courts;
 }
@@ -180,6 +180,8 @@ export interface GenerateRoundOptions {
 	format?: PairingFormat;
 	/** Partner-history counts (from computePartnerCounts), consulted only when format is 'americano'. */
 	partnerCounts?: Map<string, number>;
+	/** How a ranked group of 4 splits into teams, consulted only when format is 'mexicano'. Default 'standard'. */
+	pairingStyle?: PairingStyle;
 	random?: () => number;
 }
 
@@ -188,12 +190,17 @@ export function generateRound(
 	courtCount: number,
 	options: GenerateRoundOptions = {}
 ): RoundPlan {
-	const { format = 'mexicano', partnerCounts = new Map(), random = Math.random } = options;
+	const {
+		format = 'mexicano',
+		partnerCounts = new Map(),
+		pairingStyle = 'standard',
+		random = Math.random
+	} = options;
 	const { selected, sittingOut } = selectEligiblePlayers(standings, courtCount, random);
 	const courts =
 		format === 'americano'
 			? pairLeastRecentlyPartnered(selected, partnerCounts, random)
-			: pairByRank(selected);
+			: pairByRank(selected, pairingStyle);
 	return { courts, sittingOut };
 }
 
@@ -201,7 +208,7 @@ export function generateRound(
 export function generateFinalRoundPlan(
 	standings: PlayerStanding[],
 	courtCount: number,
-	pairingStyle: FinalRoundPairingStyle
+	pairingStyle: PairingStyle
 ): RoundPlan {
 	const eligible = standings.filter((p) => !p.benched);
 	const ranked = rankStandings(eligible);

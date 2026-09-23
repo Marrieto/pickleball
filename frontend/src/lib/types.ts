@@ -49,7 +49,7 @@ export interface Round {
 
 export type PairingFormat = 'americano' | 'mexicano';
 export type ScoringMode = 'firstTo' | 'bestOf';
-export type FinalRoundPairingStyle = 'standard' | 'alternate';
+export type PairingStyle = 'standard' | 'alternate';
 
 export interface TournamentSettings {
 	darkMode: boolean;
@@ -57,8 +57,9 @@ export interface TournamentSettings {
 	pairingFormat: PairingFormat;
 	/** firstTo = open-ended race to targetScore. bestOf = fixed point pool of targetScore, split between the two teams. */
 	scoringMode: ScoringMode;
-	/** Default partner-split style offered when generating a final round; re-selectable per generation. */
-	finalRoundPairingStyle: FinalRoundPairingStyle;
+	/** How a ranked group of 4 splits into two teams: 'standard' = 1st+4th vs 2nd+3rd, 'alternate' = 1st+3rd vs 2nd+4th.
+	 *  Governs Mexicano normal-round pairing and is the default offered when generating a final round (re-selectable per generation). */
+	pairingStyle: PairingStyle;
 }
 
 /** A physical side of a numbered court (e.g. "glasvägg"/"betongvägg") - stable across rounds, independent of which team plays there. */

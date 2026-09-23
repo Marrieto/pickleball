@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { tournamentStore } from '$lib/tournament-store.svelte';
-	import type { PairingFormat, ScoringMode } from '$lib/types';
+	import type { PairingFormat, PairingStyle, ScoringMode } from '$lib/types';
 
 	const SCORE_DEFAULTS: Record<ScoringMode, { default: number; min: number; max: number }> = {
 		firstTo: { default: 11, min: 2, max: 15 },
@@ -10,6 +10,7 @@
 	let name = $state('Pickleball Night');
 	let courtCount = $state(2);
 	let pairingFormat = $state<PairingFormat>('mexicano');
+	let pairingStyle = $state<PairingStyle>('standard');
 	let scoringMode = $state<ScoringMode>('firstTo');
 	let targetScore = $state(SCORE_DEFAULTS.firstTo.default);
 
@@ -22,6 +23,7 @@
 		e.preventDefault();
 		tournamentStore.startTournament(name.trim() || 'Tournament', courtCount, targetScore, {
 			pairingFormat,
+			pairingStyle,
 			scoringMode
 		});
 	}
@@ -54,6 +56,20 @@
 			Americano
 		</label>
 	</fieldset>
+
+	{#if pairingFormat === 'mexicano'}
+		<fieldset>
+			<legend>Team pairing (also the final round's default)</legend>
+			<label class="choice">
+				<input type="radio" bind:group={pairingStyle} value="standard" />
+				Standard (1st+4th vs 2nd+3rd)
+			</label>
+			<label class="choice">
+				<input type="radio" bind:group={pairingStyle} value="alternate" />
+				Alternate (1st+3rd vs 2nd+4th)
+			</label>
+		</fieldset>
+	{/if}
 
 	<fieldset>
 		<legend>Scoring</legend>

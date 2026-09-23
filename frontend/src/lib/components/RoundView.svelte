@@ -3,7 +3,7 @@
 	import MatchCard from './MatchCard.svelte';
 	import CourtBackdrop from './CourtBackdrop.svelte';
 	import NetZone from './NetZone.svelte';
-	import type { CourtMatch, FinalRoundPairingStyle } from '$lib/types';
+	import type { CourtMatch, PairingStyle } from '$lib/types';
 
 	let tournament = $derived(tournamentStore.tournament!);
 	let round = $derived(tournamentStore.currentRound);
@@ -17,10 +17,10 @@
 	let showFinalRoundPicker = $state(false);
 	// Not derived from `tournament.settings` on purpose: this is a per-generation editable
 	// choice, re-synced from the setting each time the picker opens (see openFinalRoundPicker).
-	let finalRoundPairingStyle = $state<FinalRoundPairingStyle>('standard');
+	let finalRoundPairingStyle = $state<PairingStyle>('standard');
 
 	function openFinalRoundPicker() {
-		finalRoundPairingStyle = tournament.settings.finalRoundPairingStyle;
+		finalRoundPairingStyle = tournament.settings.pairingStyle;
 		showFinalRoundPicker = true;
 	}
 

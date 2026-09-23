@@ -2,7 +2,7 @@ import { computePartnerCounts, generateFinalRoundPlan, generateRound } from './p
 import { makeId } from './id';
 import { computeStandings } from './standings';
 import type {
-	FinalRoundPairingStyle,
+	PairingStyle,
 	PlayerStanding,
 	Round,
 	RoundPlan,
@@ -30,7 +30,7 @@ export function createTournament(
 			darkMode: false,
 			pairingFormat: 'mexicano',
 			scoringMode: 'firstTo',
-			finalRoundPairingStyle: 'standard',
+			pairingStyle: 'standard',
 			...settings
 		},
 		courtLabels: {},
@@ -122,6 +122,7 @@ export function generateNextRound(state: TournamentActionsState): TournamentActi
 	const plan = generateRound(standings, tournament.courtCount, {
 		format: tournament.settings.pairingFormat,
 		partnerCounts,
+		pairingStyle: tournament.settings.pairingStyle,
 		random: Math.random
 	});
 	return appendRound(state, plan);
@@ -129,7 +130,7 @@ export function generateNextRound(state: TournamentActionsState): TournamentActi
 
 export function generateFinalRound(
 	state: TournamentActionsState,
-	pairingStyle: FinalRoundPairingStyle
+	pairingStyle: PairingStyle
 ): TournamentActionsState {
 	const standings = activeStandings(state);
 	const plan = generateFinalRoundPlan(standings, state.tournament.courtCount, pairingStyle);
