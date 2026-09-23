@@ -3,7 +3,7 @@
 	import MatchCard from './MatchCard.svelte';
 	import CourtBackdrop from './CourtBackdrop.svelte';
 	import NetZone from './NetZone.svelte';
-	import type { CourtMatch } from '$lib/types';
+	import type { CourtMatch, FinalRoundPairingStyle } from '$lib/types';
 
 	let tournament = $derived(tournamentStore.tournament!);
 	let round = $derived(tournamentStore.currentRound);
@@ -13,6 +13,19 @@
 
 	let editing = $state(false);
 	let selected = $state<string | null>(null);
+
+	let showFinalRoundPicker = $state(false);
+	let finalRoundPairingStyle = $state<FinalRoundPairingStyle>(tournament.settings.finalRoundPairingStyle);
+
+	function openFinalRoundPicker() {
+		finalRoundPairingStyle = tournament.settings.finalRoundPairingStyle;
+		showFinalRoundPicker = true;
+	}
+
+	function confirmFinalRound() {
+		tournamentStore.generateFinalRound(finalRoundPairingStyle);
+		showFinalRoundPicker = false;
+	}
 
 	function playerName(id: string): string {
 		return tournament.players.find((p) => p.id === id)?.name ?? '?';
@@ -70,6 +83,24 @@
 		}
 	}
 </script>
+
+{#snippet finalRoundPicker()}
+	<div class="card final-round-picker">
+		<p class="hint">Final round pairing:</p>
+		<label>
+			<input type="radio" bind:group={finalRoundPairingStyle} value="standard" />
+			Standard (1st+4th vs 2nd+3rd)
+		</label>
+		<label>
+			<input type="radio" bind:group={finalRoundPairingStyle} value="alternate" />
+			Alternate (1st+3rd vs 2nd+4th)
+		</label>
+		<div class="picker-actions">
+			<button onclick={() => (showFinalRoundPicker = false)}>Cancel</button>
+			<button class="primary" onclick={confirmFinalRound}>Confirm</button>
+		</div>
+	</div>
+{/snippet}
 
 {#if round}
 	<section class="round">
@@ -144,6 +175,7 @@
 						{match}
 						roundId={round.id}
 						maxScore={tournament.targetScore}
+						scoringMode={tournament.settings.scoringMode}
 						{playerName}
 						sideLabels={tournament.courtLabels[match.court] ?? {}}
 					/>
@@ -152,9 +184,15 @@
 		</div>
 
 		{#if isLatest}
-			<button class="primary generate" onclick={() => tournamentStore.generateNextRound()}>
-				Generate next round
-			</button>
+			<div class="round-actions">
+				<button class="primary generate" onclick={() => tournamentStore.generateNextRound()}>
+					Generate next round
+				</button>
+				<button class="secondary" onclick={openFinalRoundPicker}> Generate Final Round </button>
+			</div>
+			{#if showFinalRoundPicker}
+				{@render finalRoundPicker()}
+			{/if}
 		{/if}
 	</section>
 {:else}
@@ -167,8 +205,14 @@
 		>
 			Generate round 1
 		</button>
+		<button class="secondary" onclick={openFinalRoundPicker} disabled={activeCount < 4}>
+			Generate Final Round
+		</button>
 		{#if activeCount < 4}
 			<p class="hint">Add at least 4 players first.</p>
+		{/if}
+		{#if showFinalRoundPicker}
+			{@render finalRoundPicker()}
 		{/if}
 	</div>
 {/if}
@@ -266,6 +310,12 @@
 		border-color: var(--primary);
 		background: color-mix(in srgb, var(--primary) 20%, var(--court-panel));
 	}
+	.round-actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.75rem;
+		justify-content: center;
+	}
 	.generate {
 		align-self: center;
 	}
@@ -279,6 +329,44 @@
 	}
 	button.primary:disabled {
 		opacity: 0.5;
+	}
+	button.secondary {
+		padding: 0.75rem 1.5rem;
+		border-radius: 10px;
+		border: 1px solid var(--border);
+		background: var(--surface);
+		color: var(--text);
+		font-weight: 600;
+	}
+	button.secondary:disabled {
+		opacity: 0.5;
+	}
+	.final-round-picker {
+		align-self: center;
+		max-width: 320px;
+		padding: 1.25rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.6rem;
+	}
+	.final-round-picker label {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		font-size: 0.9rem;
+	}
+	.picker-actions {
+		display: flex;
+		gap: 0.75rem;
+		justify-content: flex-end;
+		margin-top: 0.5rem;
+	}
+	.picker-actions button {
+		padding: 0.5rem 1rem;
+		border-radius: 8px;
+		border: 1px solid var(--border);
+		background: var(--surface);
+		color: var(--text);
 	}
 	.empty-state {
 		padding: 2rem;

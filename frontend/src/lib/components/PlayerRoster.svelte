@@ -4,23 +4,55 @@
 	let tournament = $derived(tournamentStore.tournament!);
 	let activePlayers = $derived(tournament.players.filter((p) => p.active));
 	let newName = $state('');
+	let pendingName = $state<string | null>(null);
+	let startingPoints = $state(0);
 
-	function add(e: SubmitEvent) {
+	function suggestedStartingPoints(): number {
+		const standings = tournamentStore.standings;
+		return standings.length === 0 ? 0 : Math.min(...standings.map((s) => s.totalPoints));
+	}
+
+	function startAdd(e: SubmitEvent) {
 		e.preventDefault();
 		const trimmed = newName.trim();
 		if (!trimmed) return;
-		tournamentStore.addPlayer(trimmed);
+		pendingName = trimmed;
+		startingPoints = suggestedStartingPoints();
+	}
+
+	function confirmAdd() {
+		if (pendingName === null) return;
+		tournamentStore.addPlayer(pendingName, startingPoints);
+		pendingName = null;
 		newName = '';
+	}
+
+	function cancelAdd() {
+		pendingName = null;
 	}
 </script>
 
 <section class="card roster">
 	<h2>Players ({activePlayers.length})</h2>
 
-	<form onsubmit={add} class="add-row">
-		<input placeholder="Add player name" bind:value={newName} />
-		<button type="submit">Add</button>
-	</form>
+	{#if pendingName === null}
+		<form onsubmit={startAdd} class="add-row">
+			<input placeholder="Add player name" bind:value={newName} />
+			<button type="submit">Add</button>
+		</form>
+	{:else}
+		<div class="add-confirm">
+			<span class="pending-name">{pendingName}</span>
+			<label class="starting-points">
+				Starting points
+				<input type="number" bind:value={startingPoints} />
+			</label>
+			<div class="add-confirm-actions">
+				<button onclick={cancelAdd}>Cancel</button>
+				<button class="primary" onclick={confirmAdd}>Add</button>
+			</div>
+		</div>
+	{/if}
 
 	<ul>
 		{#each activePlayers as player (player.id)}
@@ -73,6 +105,50 @@
 	.add-row button {
 		padding: 0.55rem 1rem;
 		border-radius: 10px;
+		border: none;
+		background: var(--primary);
+		color: var(--primary-contrast);
+		font-weight: 600;
+	}
+	.add-confirm {
+		display: flex;
+		flex-direction: column;
+		gap: 0.6rem;
+		padding: 0.75rem;
+		border-radius: 10px;
+		background: var(--bg);
+		border: 1px solid var(--border);
+	}
+	.pending-name {
+		font-weight: 600;
+	}
+	.starting-points {
+		display: flex;
+		flex-direction: column;
+		gap: 0.3rem;
+		font-size: 0.8rem;
+		color: var(--text-muted);
+	}
+	.starting-points input {
+		padding: 0.5rem 0.65rem;
+		border-radius: 8px;
+		border: 1px solid var(--border);
+		background: var(--surface);
+		color: var(--text);
+	}
+	.add-confirm-actions {
+		display: flex;
+		gap: 0.5rem;
+		justify-content: flex-end;
+	}
+	.add-confirm-actions button {
+		padding: 0.5rem 1rem;
+		border-radius: 8px;
+		border: 1px solid var(--border);
+		background: var(--surface);
+		color: var(--text);
+	}
+	.add-confirm-actions button.primary {
 		border: none;
 		background: var(--primary);
 		color: var(--primary-contrast);

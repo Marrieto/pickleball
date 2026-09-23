@@ -2,6 +2,12 @@
 	import { tournamentStore } from '$lib/tournament-store.svelte';
 
 	let tournament = $derived(tournamentStore.tournament!);
+	let scoreLabel = $derived(
+		tournament.settings.scoringMode === 'bestOf'
+			? `best of ${tournament.targetScore}`
+			: `first to ${tournament.targetScore}`
+	);
+	let formatLabel = $derived(tournament.settings.pairingFormat === 'americano' ? 'Americano' : 'Mexicano');
 
 	function endTournament() {
 		if (confirm('End this tournament? This clears it from this device.')) {
@@ -15,7 +21,7 @@
 		<img class="logo" src="/icon.svg" alt="" />
 		<div>
 			<h1>{tournament.name}</h1>
-			<span class="meta">{tournament.courtCount} courts · first to {tournament.targetScore}</span>
+			<span class="meta">{tournament.courtCount} courts · {scoreLabel} · {formatLabel}</span>
 		</div>
 	</div>
 	<div class="actions">

@@ -1,19 +1,23 @@
 <script lang="ts">
 	import { tournamentStore } from '$lib/tournament-store.svelte';
+	import { applyScoreSelection } from '$lib/score-entry';
 	import CourtBackdrop from './CourtBackdrop.svelte';
 	import NetZone from './NetZone.svelte';
-	import type { CourtMatch, CourtSideLabels } from '$lib/types';
+	import ScorePicker from './ScorePicker.svelte';
+	import type { CourtMatch, CourtSideLabels, ScoringMode } from '$lib/types';
 
 	let {
 		match,
 		roundId,
 		maxScore,
+		scoringMode,
 		playerName,
 		sideLabels
 	}: {
 		match: CourtMatch;
 		roundId: string;
 		maxScore: number;
+		scoringMode: ScoringMode;
 		playerName: (id: string) => string;
 		sideLabels: CourtSideLabels;
 	} = $props();
@@ -21,7 +25,13 @@
 	let scoreA = $state(match.score?.teamAPoints ?? 0);
 	let scoreB = $state(match.score?.teamBPoints ?? 0);
 
-	function submit() {
+	function onPick(team: 'A' | 'B', value: number) {
+		const next = applyScoreSelection(scoringMode, maxScore, team, value, {
+			teamAPoints: scoreA,
+			teamBPoints: scoreB
+		});
+		scoreA = next.teamAPoints;
+		scoreB = next.teamBPoints;
 		tournamentStore.recordScore(roundId, match.court, scoreA, scoreB);
 	}
 
@@ -61,14 +71,13 @@
 				{/if}
 				<span class="players">{playerName(match.teamA[0])} &amp; {playerName(match.teamA[1])}</span>
 			</div>
-			<input
-				type="number"
-				min="0"
+			<ScorePicker
+				value={scoreA}
 				max={maxScore}
-				bind:value={scoreA}
-				onchange={submit}
-				class:win={match.score && scoreA > scoreB}
-				class:lose={match.score && scoreA < scoreB}
+				label="{playerName(match.teamA[0])} & {playerName(match.teamA[1])}"
+				win={!!match.score && scoreA > scoreB}
+				lose={!!match.score && scoreA < scoreB}
+				onSelect={(n) => onPick('A', n)}
 			/>
 		</div>
 
@@ -91,14 +100,13 @@
 				{/if}
 				<span class="players">{playerName(match.teamB[0])} &amp; {playerName(match.teamB[1])}</span>
 			</div>
-			<input
-				type="number"
-				min="0"
+			<ScorePicker
+				value={scoreB}
 				max={maxScore}
-				bind:value={scoreB}
-				onchange={submit}
-				class:win={match.score && scoreB > scoreA}
-				class:lose={match.score && scoreB < scoreA}
+				label="{playerName(match.teamB[0])} & {playerName(match.teamB[1])}"
+				win={!!match.score && scoreB > scoreA}
+				lose={!!match.score && scoreB < scoreA}
+				onSelect={(n) => onPick('B', n)}
 			/>
 		</div>
 	</div>
@@ -162,25 +170,5 @@
 		background: var(--surface);
 		color: var(--text);
 		width: 8rem;
-	}
-	.team input[type='number'] {
-		width: 3.5rem;
-		padding: 0.35rem 0.5rem;
-		border-radius: 8px;
-		border: 1px solid var(--border);
-		background: var(--surface);
-		color: var(--text);
-		text-align: center;
-		font-size: 1.1rem;
-		font-weight: 700;
-		font-variant-numeric: tabular-nums;
-	}
-	.team input[type='number'].win {
-		background: var(--win-bg);
-		border-color: var(--win-border);
-	}
-	.team input[type='number'].lose {
-		background: var(--lose-bg);
-		border-color: var(--lose-border);
 	}
 </style>
