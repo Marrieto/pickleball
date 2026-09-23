@@ -1,0 +1,240 @@
+import { PersistedState } from 'runed';
+import {
+	addPlayer as addPlayerAction,
+	createTournament as createTournamentAction,
+	editRoundAssignment as editRoundAssignmentAction,
+	generateFinalRound as generateFinalRoundAction,
+	generateNextRound as generateNextRoundAction,
+	goToRound as goToRoundAction,
+	recordScore as recordScoreAction,
+	removePlayer as removePlayerAction,
+	setCourtLabel as setCourtLabelAction,
+	togglePendingBench as togglePendingBenchAction,
+	undoLastAction as undoLastActionAction
+} from './tournament-actions';
+import { computeStandings, rankStandings } from './standings';
+import type {
+	PairingStyle,
+	CourtSideLabels,
+	PlayerStanding,
+	Round,
+	Tournament,
+	TournamentActionsState,
+	TournamentSettings
+} from './types';
+
+const DEFAULT_SETTINGS: TournamentSettings = {
+	darkMode: false,
+	pairingFormat: 'mexicano',
+	scoringMode: 'firstTo',
+	pairingStyle: 'standard'
+};
+
+const TOURNAMENT_KEY = 'americano:tournament';
+const roundKey = (id: string) => `americano:round:${id}`;
+
+interface DevicePreferences {
+	darkMode: boolean;
+	courtLabels: Record<number, CourtSideLabels>;
+}
+
+export class TournamentStore {
+	private tournamentState = new PersistedState<Tournament | null>(TOURNAMENT_KEY, null);
+	private preferences = new PersistedState<DevicePreferences>('americano:preferences', {
+		darkMode: this.tournamentState.current?.settings?.darkMode ?? false,
+		courtLabels: this.tournamentState.current?.courtLabels ?? {}
+	});
+	private roundStates = new Map<string, PersistedState<Round>>();
+
+	get darkMode(): boolean {
+		return this.preferences.current.darkMode;
+	}
+
+	get tournament(): Tournament | null {
+		const t = this.tournamentState.current;
+		if (!t) return t;
+		// Defensive defaults for tournaments persisted before these settings existed.
+		return { ...t, settings: { ...DEFAULT_SETTINGS, ...t.settings } };
+	}
+
+	get currentRound(): Round | undefined {
+		const t = this.tournament;
+		if (!t || t.currentRoundIndex < 0) return undefined;
+		return this.round(t.roundIds[t.currentRoundIndex]);
+	}
+
+	get standings(): PlayerStanding[] {
+		const t = this.tournament;
+		if (!t) return [];
+		const active = t.players.filter((p) => p.active);
+		const history = t.roundIds.map((id) => this.round(id)!).filter((round) => !round.isFinal);
+		const latestRound = this.round(t.roundIds.at(-1) ?? '');
+		return rankStandings(computeStandings(active, history).map((standing) => ({
+			...standing,
+			timesSatOut: standing.timesSatOut - (
+				latestRound && !latestRound.isFinal && latestRound.sittingOut.includes(standing.id) ? 1 : 0
+			)
+		})));
+	}
+
+	get isFinalized(): boolean {
+		return this.tournament?.roundIds.some((id) => this.round(id)?.isFinal) ?? false;
+	}
+
+	round(id: string): Round | undefined {
+		return id ? this.roundState(id).current : undefined;
+	}
+
+	private roundState(id: string): PersistedState<Round> {
+		let state = this.roundStates.get(id);
+		if (!state) {
+			state = new PersistedState<Round>(roundKey(id), {
+				id,
+				roundNumber: 0,
+				courts: [],
+				sittingOut: [],
+				benchedPlayerIds: [],
+				createdAt: Date.now()
+			});
+			this.roundStates.set(id, state);
+		}
+		return state;
+	}
+
+	private collectRounds(t: Tournament): Record<string, Round> {
+		const rounds: Record<string, Round> = {};
+		for (const id of t.roundIds) rounds[id] = this.roundState(id).current;
+		return rounds;
+	}
+
+	private apply(result: TournamentActionsState, previousRoundIds: string[]) {
+		this.tournamentState.current = result.tournament;
+		for (const id of Object.keys(result.rounds)) {
+			this.roundState(id).current = result.rounds[id];
+		}
+		for (const id of previousRoundIds) {
+			if (!(id in result.rounds)) {
+				this.roundStates.get(id)?.disconnect();
+				this.roundStates.delete(id);
+			}
+		}
+	}
+
+	startTournament(
+		name: string,
+		courtCount: number,
+		targetScore: number,
+		settings?: Partial<TournamentSettings>
+	) {
+		this.tournamentState.current = {
+			...createTournamentAction(name, courtCount, targetScore, { ...settings, darkMode: this.darkMode }),
+			courtLabels: Object.fromEntries(
+				Object.entries(this.preferences.current.courtLabels).map(([court, labels]) => [court, { ...labels }])
+			)
+		};
+	}
+
+	endTournament() {
+		for (const state of this.roundStates.values()) state.disconnect();
+		this.roundStates.clear();
+		this.tournamentState.current = null;
+	}
+
+	addPlayer(name: string, startingPoints = 0) {
+		if (!this.tournament || this.isFinalized) return;
+		this.tournamentState.current = addPlayerAction(this.tournament, name, startingPoints);
+	}
+
+	removePlayer(id: string) {
+		if (!this.tournament || this.isFinalized) return;
+		this.tournamentState.current = removePlayerAction(this.tournament, id);
+	}
+
+	togglePendingBench(id: string) {
+		if (!this.tournament || this.isFinalized) return;
+		this.tournamentState.current = togglePendingBenchAction(this.tournament, id);
+	}
+
+	setCourtLabel(court: number, side: 'teamA' | 'teamB', label: string) {
+		if (!this.tournament || this.isFinalized) return;
+		const updated = setCourtLabelAction(this.tournament, court, side, label);
+		this.tournamentState.current = updated;
+		const preferences = this.preferences.current;
+		this.preferences.current = {
+			...preferences,
+			courtLabels: {
+				...preferences.courtLabels,
+				[court]: { ...preferences.courtLabels[court], [side]: updated.courtLabels[court][side] }
+			}
+		};
+	}
+
+	generateNextRound() {
+		const t = this.tournament;
+		if (!t) return;
+		const result = generateNextRoundAction({ tournament: t, rounds: this.collectRounds(t) });
+		this.apply(result, t.roundIds);
+	}
+
+	generateFinalRound(pairingStyle: PairingStyle) {
+		const t = this.tournament;
+		if (!t) return;
+		const result = generateFinalRoundAction({ tournament: t, rounds: this.collectRounds(t) }, pairingStyle);
+		this.apply(result, t.roundIds);
+	}
+
+	recordScore(roundId: string, court: number, teamAPoints: number, teamBPoints: number) {
+		const t = this.tournament;
+		if (!t) return;
+		const result = recordScoreAction(
+			{ tournament: t, rounds: this.collectRounds(t) },
+			roundId,
+			court,
+			teamAPoints,
+			teamBPoints
+		);
+		this.apply(result, t.roundIds);
+	}
+
+	editRoundAssignment(
+		roundId: string,
+		court: number,
+		teamA: [string, string],
+		teamB: [string, string]
+	) {
+		const t = this.tournament;
+		if (!t) return;
+		const result = editRoundAssignmentAction(
+			{ tournament: t, rounds: this.collectRounds(t) },
+			roundId,
+			court,
+			teamA,
+			teamB
+		);
+		this.apply(result, t.roundIds);
+	}
+
+	undo() {
+		const t = this.tournament;
+		if (!t) return;
+		const result = undoLastActionAction({ tournament: t, rounds: this.collectRounds(t) });
+		this.apply(result, t.roundIds);
+	}
+
+	goToRound(index: number) {
+		if (!this.tournament) return;
+		this.tournamentState.current = goToRoundAction(this.tournament, index);
+	}
+
+	toggleDarkMode() {
+		const darkMode = !this.darkMode;
+		this.preferences.current = { ...this.preferences.current, darkMode };
+		if (!this.tournament) return;
+		this.tournamentState.current = {
+			...this.tournament,
+			settings: { ...this.tournament.settings, darkMode }
+		};
+	}
+}
+
+export const tournamentStore = new TournamentStore();
