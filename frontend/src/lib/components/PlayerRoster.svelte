@@ -3,6 +3,7 @@
 
 	let tournament = $derived(tournamentStore.tournament!);
 	let activePlayers = $derived(tournament.players.filter((p) => p.active));
+	let gameInProgress = $derived(tournament.roundIds.length > 0);
 	let newName = $state('');
 	let pendingName = $state<string | null>(null);
 	let startingPoints = $state(0);
@@ -12,12 +13,17 @@
 		return standings.length === 0 ? 0 : Math.min(...standings.map((s) => s.totalPoints));
 	}
 
-	function startAdd(e: SubmitEvent) {
+	function add(e: SubmitEvent) {
 		e.preventDefault();
 		const trimmed = newName.trim();
 		if (!trimmed) return;
-		pendingName = trimmed;
-		startingPoints = suggestedStartingPoints();
+		if (gameInProgress) {
+			pendingName = trimmed;
+			startingPoints = suggestedStartingPoints();
+			return;
+		}
+		tournamentStore.addPlayer(trimmed);
+		newName = '';
 	}
 
 	function confirmAdd() {
@@ -35,17 +41,19 @@
 <section class="card roster">
 	<h2>Players ({activePlayers.length})</h2>
 
-	{#if pendingName === null}
-		<form onsubmit={startAdd} class="add-row">
-			<input placeholder="Add player name" bind:value={newName} />
-			<button type="submit">Add</button>
-		</form>
-	{:else}
-		<div class="add-confirm">
-			<span class="pending-name">{pendingName}</span>
+	<form onsubmit={add} class="add-row">
+		<input placeholder="Add player name" bind:value={newName} />
+		<button type="submit">Add</button>
+	</form>
+
+	{#if pendingName !== null}
+		<button class="backdrop" aria-label="Close" onclick={cancelAdd}></button>
+		<div class="card add-modal" role="dialog" aria-label="Starting points for {pendingName}">
+			<p class="add-modal-title">Add {pendingName}</p>
+			<p class="hint">Game's in progress - pick a starting score.</p>
 			<label class="starting-points">
 				Starting points
-				<input type="number" bind:value={startingPoints} />
+				<input type="number" min="0" bind:value={startingPoints} />
 			</label>
 			<div class="add-confirm-actions">
 				<button onclick={cancelAdd}>Cancel</button>
@@ -110,17 +118,34 @@
 		color: var(--primary-contrast);
 		font-weight: 600;
 	}
-	.add-confirm {
+	.backdrop {
+		position: fixed;
+		inset: 0;
+		border: none;
+		background: rgba(0, 0, 0, 0.5);
+		z-index: 20;
+	}
+	.add-modal {
+		position: fixed;
+		inset: auto 5vw auto 5vw;
+		top: 50%;
+		transform: translateY(-50%);
+		max-width: 360px;
+		margin: 0 auto;
+		z-index: 21;
+		padding: 1.25rem;
 		display: flex;
 		flex-direction: column;
 		gap: 0.6rem;
-		padding: 0.75rem;
-		border-radius: 10px;
-		background: var(--bg);
-		border: 1px solid var(--border);
 	}
-	.pending-name {
+	.add-modal-title {
+		margin: 0;
 		font-weight: 600;
+	}
+	.hint {
+		margin: 0;
+		font-size: 0.8rem;
+		color: var(--text-muted);
 	}
 	.starting-points {
 		display: flex;
