@@ -11,7 +11,7 @@ function roundIncludes(round: Round, playerId: string): boolean {
 export function computeStandings(players: Player[], rounds: Round[]): PlayerStanding[] {
 	return players.map((player) => {
 		let gamesPlayed = 0;
-		let totalPoints = 0;
+		let totalPoints = player.startingPoints ?? 0;
 		let wins = 0;
 		let timesSatOut = 0;
 		let roundsSincePlayed = rounds.length;

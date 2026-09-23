@@ -2,8 +2,8 @@ import { describe, expect, test } from 'vitest';
 import { computeStandings, rankStandings } from './standings';
 import type { Player, PlayerStanding, Round } from './types';
 
-function player(id: string, name = id): Player {
-	return { id, name, active: true };
+function player(id: string, name = id, startingPoints = 0): Player {
+	return { id, name, active: true, startingPoints };
 }
 
 function round(overrides: Partial<Round> & { roundNumber: number }): Round {
@@ -171,6 +171,42 @@ describe('computeStandings - fairness (sit-outs and adjusted score)', () => {
 		const standings = computeStandings(players, rounds);
 
 		expect(standings.find((s) => s.id === 'A')?.adjustedScore).toBe(0);
+	});
+});
+
+describe('computeStandings - starting points', () => {
+	test('a new player with starting points and no rounds has that as their total, but 0 games/adjustedScore', () => {
+		const players = [player('A', 'A', 5)];
+
+		const standings = computeStandings(players, []);
+
+		const a = standings.find((s) => s.id === 'A')!;
+		expect(a.totalPoints).toBe(5);
+		expect(a.gamesPlayed).toBe(0);
+		expect(a.adjustedScore).toBe(0);
+	});
+
+	test('starting points add to points earned from actually playing', () => {
+		const players = [player('A', 'A', 5), player('B'), player('C'), player('D')];
+		const rounds = [
+			round({
+				roundNumber: 1,
+				courts: [
+					{
+						court: 1,
+						teamA: ['A', 'B'],
+						teamB: ['C', 'D'],
+						score: { teamAPoints: 8, teamBPoints: 5 }
+					}
+				]
+			})
+		];
+
+		const standings = computeStandings(players, rounds);
+
+		const a = standings.find((s) => s.id === 'A')!;
+		expect(a.totalPoints).toBe(13);
+		expect(a.gamesPlayed).toBe(1);
 	});
 });
 
