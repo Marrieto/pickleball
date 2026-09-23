@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { tournamentStore } from '$lib/tournament-store.svelte';
-	import { applyScoreSelection, pickerMax } from '$lib/score-entry';
+	import { applyScoreSelection } from '$lib/score-entry';
 	import CourtBackdrop from './CourtBackdrop.svelte';
 	import NetZone from './NetZone.svelte';
 	import ScorePicker from './ScorePicker.svelte';
@@ -24,7 +24,6 @@
 
 	let scoreA = $state(match.score?.teamAPoints ?? 0);
 	let scoreB = $state(match.score?.teamBPoints ?? 0);
-	let gridMax = $derived(pickerMax(scoringMode, maxScore));
 
 	function onPick(team: 'A' | 'B', value: number) {
 		const next = applyScoreSelection(scoringMode, maxScore, team, value, {
@@ -74,7 +73,7 @@
 			</div>
 			<ScorePicker
 				value={scoreA}
-				max={gridMax}
+				max={maxScore}
 				label="{playerName(match.teamA[0])} & {playerName(match.teamA[1])}"
 				win={!!match.score && scoreA > scoreB}
 				lose={!!match.score && scoreA < scoreB}
@@ -103,7 +102,7 @@
 			</div>
 			<ScorePicker
 				value={scoreB}
-				max={gridMax}
+				max={maxScore}
 				label="{playerName(match.teamB[0])} & {playerName(match.teamB[1])}"
 				win={!!match.score && scoreB > scoreA}
 				lose={!!match.score && scoreB < scoreA}

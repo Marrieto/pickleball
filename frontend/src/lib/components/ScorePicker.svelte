@@ -80,7 +80,11 @@
 	}
 	.popover {
 		position: fixed;
-		inset: 10vh 5vw;
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
+		width: min(90vw, 27rem);
+		max-height: 85vh;
 		z-index: 21;
 		overflow-y: auto;
 		padding: 1.25rem;
@@ -95,8 +99,8 @@
 	}
 	.grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(3.5rem, 1fr));
-		gap: 0.6rem;
+		grid-template-columns: repeat(7, 1fr);
+		gap: 0.5rem;
 	}
 	.option {
 		aspect-ratio: 1;
@@ -104,7 +108,7 @@
 		border: 1px solid var(--border);
 		background: var(--court-panel);
 		color: var(--text);
-		font-size: 1.15rem;
+		font-size: 1rem;
 		font-weight: 600;
 		font-variant-numeric: tabular-nums;
 	}
