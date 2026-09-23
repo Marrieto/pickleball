@@ -1,9 +1,20 @@
-import { generateRound } from './pairing';
+import { computePartnerCounts, generateFinalRoundPlan, generateRound } from './pairing';
 import { makeId } from './id';
 import { computeStandings } from './standings';
-import type { Round, Tournament, TournamentActionsState } from './types';
+import type {
+	FinalRoundPairingStyle,
+	Round,
+	Tournament,
+	TournamentActionsState,
+	TournamentSettings
+} from './types';
 
-export function createTournament(name: string, courtCount: number, targetScore: number): Tournament {
+export function createTournament(
+	name: string,
+	courtCount: number,
+	targetScore: number,
+	settings: Partial<TournamentSettings> = {}
+): Tournament {
 	return {
 		id: makeId(),
 		name,
@@ -13,7 +24,13 @@ export function createTournament(name: string, courtCount: number, targetScore: 
 		roundIds: [],
 		currentRoundIndex: -1,
 		pendingBenchIds: [],
-		settings: { darkMode: false },
+		settings: {
+			darkMode: false,
+			pairingFormat: 'mexicano',
+			scoringMode: 'firstTo',
+			finalRoundPairingStyle: 'standard',
+			...settings
+		},
 		courtLabels: {},
 		createdAt: Date.now()
 	};
@@ -35,10 +52,10 @@ export function setCourtLabel(
 	};
 }
 
-export function addPlayer(tournament: Tournament, name: string): Tournament {
+export function addPlayer(tournament: Tournament, name: string, startingPoints = 0): Tournament {
 	return {
 		...tournament,
-		players: [...tournament.players, { id: makeId(), name, active: true }]
+		players: [...tournament.players, { id: makeId(), name, active: true, startingPoints }]
 	};
 }
 
@@ -69,7 +86,47 @@ export function generateNextRound(state: TournamentActionsState): TournamentActi
 		(s) => ({ ...s, benched: tournament.pendingBenchIds.includes(s.id) })
 	);
 
-	const plan = generateRound(standings, tournament.courtCount);
+	const partnerCounts = computePartnerCounts(roundHistory);
+	const plan = generateRound(standings, tournament.courtCount, {
+		format: tournament.settings.pairingFormat,
+		partnerCounts,
+		random: Math.random
+	});
+
+	const round: Round = {
+		id: makeId(),
+		roundNumber: roundHistory.length + 1,
+		courts: plan.courts,
+		sittingOut: plan.sittingOut,
+		benchedPlayerIds: tournament.pendingBenchIds,
+		createdAt: Date.now()
+	};
+
+	return {
+		tournament: {
+			...tournament,
+			roundIds: [...tournament.roundIds, round.id],
+			currentRoundIndex: tournament.roundIds.length,
+			pendingBenchIds: [],
+			lastAction: { type: 'round', roundId: round.id }
+		},
+		rounds: { ...rounds, [round.id]: round }
+	};
+}
+
+export function generateFinalRound(
+	state: TournamentActionsState,
+	pairingStyle: FinalRoundPairingStyle
+): TournamentActionsState {
+	const { tournament, rounds } = state;
+	const roundHistory = tournament.roundIds.map((id) => rounds[id]);
+	const activePlayers = tournament.players.filter((p) => p.active);
+
+	const standings = computeStandings(activePlayers, roundHistory).map(
+		(s) => ({ ...s, benched: tournament.pendingBenchIds.includes(s.id) })
+	);
+
+	const plan = generateFinalRoundPlan(standings, tournament.courtCount, pairingStyle);
 
 	const round: Round = {
 		id: makeId(),

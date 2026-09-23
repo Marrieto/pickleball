@@ -1,8 +1,9 @@
-import { describe, expect, test } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 import {
 	addPlayer,
 	createTournament,
 	editRoundAssignment,
+	generateFinalRound,
 	generateNextRound,
 	goToRound,
 	recordScore,
@@ -31,6 +32,26 @@ describe('createTournament', () => {
 		expect(tournament.players).toEqual([]);
 		expect(tournament.roundIds).toEqual([]);
 	});
+
+	test('defaults new settings to mexicano/firstTo/standard', () => {
+		const tournament = createTournament('T', 1, 8);
+
+		expect(tournament.settings.pairingFormat).toBe('mexicano');
+		expect(tournament.settings.scoringMode).toBe('firstTo');
+		expect(tournament.settings.finalRoundPairingStyle).toBe('standard');
+	});
+
+	test('honors settings overrides', () => {
+		const tournament = createTournament('T', 1, 21, {
+			pairingFormat: 'americano',
+			scoringMode: 'bestOf',
+			finalRoundPairingStyle: 'alternate'
+		});
+
+		expect(tournament.settings.pairingFormat).toBe('americano');
+		expect(tournament.settings.scoringMode).toBe('bestOf');
+		expect(tournament.settings.finalRoundPairingStyle).toBe('alternate');
+	});
 });
 
 describe('addPlayer / removePlayer', () => {
@@ -42,6 +63,15 @@ describe('addPlayer / removePlayer', () => {
 		expect(tournament.players.map((p) => p.name)).toEqual(['Alice', 'Bob']);
 		expect(tournament.players.every((p) => p.active)).toBe(true);
 		expect(new Set(tournament.players.map((p) => p.id)).size).toBe(2);
+	});
+
+	test('addPlayer sets startingPoints from the 3rd arg, defaulting to 0', () => {
+		let tournament = createTournament('T', 1, 8);
+		tournament = addPlayer(tournament, 'Alice', 5);
+		tournament = addPlayer(tournament, 'Bob');
+
+		expect(tournament.players[0].startingPoints).toBe(5);
+		expect(tournament.players[1].startingPoints).toBe(0);
 	});
 
 	test('removePlayer marks a player inactive without deleting their history record', () => {
@@ -83,6 +113,66 @@ describe('generateNextRound', () => {
 		expect(round.courts.flatMap((c: CourtMatch) => [...c.teamA, ...c.teamB])).not.toContain(
 			benchedId
 		);
+	});
+});
+
+describe('generateNextRound - americano format wiring', () => {
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	test('builds partnerCounts from round history and avoids repeating a partnered pair when a fresh option exists', () => {
+		vi.spyOn(Math, 'random').mockReturnValue(0);
+
+		let state = withPlayers(8, 2);
+		state.tournament = { ...state.tournament, settings: { ...state.tournament.settings, pairingFormat: 'americano' } };
+
+		state = generateNextRound(state);
+		const round1 = state.rounds[state.tournament.roundIds[0]];
+		const round1Pairs = round1.courts.flatMap((c) => [
+			[...c.teamA].sort().join('+'),
+			[...c.teamB].sort().join('+')
+		]);
+
+		state = generateNextRound(state);
+		const round2 = state.rounds[state.tournament.roundIds[1]];
+		const round2Pairs = round2.courts.flatMap((c) => [
+			[...c.teamA].sort().join('+'),
+			[...c.teamB].sort().join('+')
+		]);
+
+		expect(round2Pairs.some((pair) => round1Pairs.includes(pair))).toBe(false);
+	});
+});
+
+describe('generateFinalRound', () => {
+	test('creates a round following the same shape as generateNextRound: appends, advances index, clears benches', () => {
+		let state = withPlayers(4, 1);
+		const benchedId = state.tournament.players[0].id;
+		state.tournament = togglePendingBench(state.tournament, benchedId);
+
+		const next = generateFinalRound(state, 'standard');
+
+		expect(next.tournament.roundIds).toHaveLength(1);
+		expect(next.tournament.currentRoundIndex).toBe(0);
+		expect(next.tournament.pendingBenchIds).toEqual([]);
+		const round = next.rounds[next.tournament.roundIds[0]];
+		expect(round.benchedPlayerIds).toEqual([benchedId]);
+	});
+
+	test('undoLastAction reverts a final round exactly like a normal round', () => {
+		let state = withPlayers(5, 1);
+		const benchedId = state.tournament.players[0].id;
+		state.tournament = togglePendingBench(state.tournament, benchedId);
+		state = generateFinalRound(state, 'standard');
+		const roundId = state.tournament.roundIds[0];
+
+		const next = undoLastAction(state);
+
+		expect(next.tournament.roundIds).toEqual([]);
+		expect(next.rounds[roundId]).toBeUndefined();
+		expect(next.tournament.currentRoundIndex).toBe(-1);
+		expect(next.tournament.pendingBenchIds).toEqual([benchedId]);
 	});
 });
 
