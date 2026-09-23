@@ -34,6 +34,8 @@ export interface Player {
 	id: string;
 	name: string;
 	active: boolean;
+	/** One-time starting point offset, set when the player is added (e.g. to match the lowest current standing). Never recalculated. */
+	startingPoints: number;
 }
 
 export interface Round {
@@ -45,8 +47,18 @@ export interface Round {
 	createdAt: number;
 }
 
+export type PairingFormat = 'americano' | 'mexicano';
+export type ScoringMode = 'firstTo' | 'bestOf';
+export type FinalRoundPairingStyle = 'standard' | 'alternate';
+
 export interface TournamentSettings {
 	darkMode: boolean;
+	/** Americano = least-recently-partnered rotation, ignores standings. Mexicano = rank-based seeding from current standings (today's default). */
+	pairingFormat: PairingFormat;
+	/** firstTo = open-ended race to targetScore. bestOf = fixed point pool of targetScore, split between the two teams. */
+	scoringMode: ScoringMode;
+	/** Default partner-split style offered when generating a final round; re-selectable per generation. */
+	finalRoundPairingStyle: FinalRoundPairingStyle;
 }
 
 /** A physical side of a numbered court (e.g. "glasvägg"/"betongvägg") - stable across rounds, independent of which team plays there. */
