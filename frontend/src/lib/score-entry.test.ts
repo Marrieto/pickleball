@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { applyScoreSelection } from './score-entry';
+import { applyScoreSelection, pickerMax } from './score-entry';
 
 describe('applyScoreSelection - firstTo', () => {
 	test('selecting team A leaves team B untouched', () => {
@@ -45,5 +45,15 @@ describe('applyScoreSelection - bestOf', () => {
 		const afterB = applyScoreSelection('bestOf', 21, 'B', 4, afterA);
 
 		expect(afterB).toEqual({ teamAPoints: 17, teamBPoints: 4 });
+	});
+});
+
+describe('pickerMax', () => {
+	test('firstTo extends past the target so win-by-2 finishes can be recorded', () => {
+		expect(pickerMax('firstTo', 11)).toBe(15);
+	});
+
+	test('bestOf is capped exactly at the target, since the pool is fixed', () => {
+		expect(pickerMax('bestOf', 21)).toBe(21);
 	});
 });

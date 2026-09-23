@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { tournamentStore } from '$lib/tournament-store.svelte';
-	import { applyScoreSelection } from '$lib/score-entry';
+	import { applyScoreSelection, pickerMax } from '$lib/score-entry';
 	import CourtBackdrop from './CourtBackdrop.svelte';
 	import NetZone from './NetZone.svelte';
 	import ScorePicker from './ScorePicker.svelte';
@@ -24,6 +24,7 @@
 
 	let scoreA = $state(match.score?.teamAPoints ?? 0);
 	let scoreB = $state(match.score?.teamBPoints ?? 0);
+	let gridMax = $derived(pickerMax(scoringMode, maxScore));
 
 	function onPick(team: 'A' | 'B', value: number) {
 		const next = applyScoreSelection(scoringMode, maxScore, team, value, {
@@ -73,7 +74,7 @@
 			</div>
 			<ScorePicker
 				value={scoreA}
-				max={maxScore}
+				max={gridMax}
 				label="{playerName(match.teamA[0])} & {playerName(match.teamA[1])}"
 				win={!!match.score && scoreA > scoreB}
 				lose={!!match.score && scoreA < scoreB}
@@ -102,7 +103,7 @@
 			</div>
 			<ScorePicker
 				value={scoreB}
-				max={maxScore}
+				max={gridMax}
 				label="{playerName(match.teamB[0])} & {playerName(match.teamB[1])}"
 				win={!!match.score && scoreB > scoreA}
 				lose={!!match.score && scoreB < scoreA}
@@ -119,8 +120,10 @@
 		padding: 1.75rem 1.25rem;
 	}
 	.content {
+		/* position (not z-index) is enough to paint above CourtBackdrop's absolute z-index:0 -
+		   an explicit z-index here would open a stacking context that traps ScorePicker's
+		   fixed-position popover beneath the sticky TopBar. */
 		position: relative;
-		z-index: 1;
 		display: flex;
 		flex-direction: column;
 		gap: 1.25rem;

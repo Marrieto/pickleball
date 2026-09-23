@@ -15,7 +15,9 @@
 	let selected = $state<string | null>(null);
 
 	let showFinalRoundPicker = $state(false);
-	let finalRoundPairingStyle = $state<FinalRoundPairingStyle>(tournament.settings.finalRoundPairingStyle);
+	// Not derived from `tournament.settings` on purpose: this is a per-generation editable
+	// choice, re-synced from the setting each time the picker opens (see openFinalRoundPicker).
+	let finalRoundPairingStyle = $state<FinalRoundPairingStyle>('standard');
 
 	function openFinalRoundPicker() {
 		finalRoundPairingStyle = tournament.settings.finalRoundPairingStyle;

@@ -3,7 +3,9 @@ import { makeId } from './id';
 import { computeStandings } from './standings';
 import type {
 	FinalRoundPairingStyle,
+	PlayerStanding,
 	Round,
+	RoundPlan,
 	Tournament,
 	TournamentActionsState,
 	TournamentSettings
@@ -77,25 +79,23 @@ export function togglePendingBench(tournament: Tournament, playerId: string): To
 	};
 }
 
-export function generateNextRound(state: TournamentActionsState): TournamentActionsState {
+/** Standings for the tournament's active players, with pending-bench players marked. Shared by every round-generating action. */
+function activeStandings(state: TournamentActionsState): PlayerStanding[] {
 	const { tournament, rounds } = state;
 	const roundHistory = tournament.roundIds.map((id) => rounds[id]);
 	const activePlayers = tournament.players.filter((p) => p.active);
+	return computeStandings(activePlayers, roundHistory).map((s) => ({
+		...s,
+		benched: tournament.pendingBenchIds.includes(s.id)
+	}));
+}
 
-	const standings = computeStandings(activePlayers, roundHistory).map(
-		(s) => ({ ...s, benched: tournament.pendingBenchIds.includes(s.id) })
-	);
-
-	const partnerCounts = computePartnerCounts(roundHistory);
-	const plan = generateRound(standings, tournament.courtCount, {
-		format: tournament.settings.pairingFormat,
-		partnerCounts,
-		random: Math.random
-	});
-
+/** Appends a new Round built from a RoundPlan, advances the tournament, and clears pending benches. Shared by every round-generating action so undoLastAction generalizes across all of them. */
+function appendRound(state: TournamentActionsState, plan: RoundPlan): TournamentActionsState {
+	const { tournament, rounds } = state;
 	const round: Round = {
 		id: makeId(),
-		roundNumber: roundHistory.length + 1,
+		roundNumber: tournament.roundIds.length + 1,
 		courts: plan.courts,
 		sittingOut: plan.sittingOut,
 		benchedPlayerIds: tournament.pendingBenchIds,
@@ -114,39 +114,26 @@ export function generateNextRound(state: TournamentActionsState): TournamentActi
 	};
 }
 
+export function generateNextRound(state: TournamentActionsState): TournamentActionsState {
+	const { tournament, rounds } = state;
+	const roundHistory = tournament.roundIds.map((id) => rounds[id]);
+	const standings = activeStandings(state);
+	const partnerCounts = computePartnerCounts(roundHistory);
+	const plan = generateRound(standings, tournament.courtCount, {
+		format: tournament.settings.pairingFormat,
+		partnerCounts,
+		random: Math.random
+	});
+	return appendRound(state, plan);
+}
+
 export function generateFinalRound(
 	state: TournamentActionsState,
 	pairingStyle: FinalRoundPairingStyle
 ): TournamentActionsState {
-	const { tournament, rounds } = state;
-	const roundHistory = tournament.roundIds.map((id) => rounds[id]);
-	const activePlayers = tournament.players.filter((p) => p.active);
-
-	const standings = computeStandings(activePlayers, roundHistory).map(
-		(s) => ({ ...s, benched: tournament.pendingBenchIds.includes(s.id) })
-	);
-
-	const plan = generateFinalRoundPlan(standings, tournament.courtCount, pairingStyle);
-
-	const round: Round = {
-		id: makeId(),
-		roundNumber: roundHistory.length + 1,
-		courts: plan.courts,
-		sittingOut: plan.sittingOut,
-		benchedPlayerIds: tournament.pendingBenchIds,
-		createdAt: Date.now()
-	};
-
-	return {
-		tournament: {
-			...tournament,
-			roundIds: [...tournament.roundIds, round.id],
-			currentRoundIndex: tournament.roundIds.length,
-			pendingBenchIds: [],
-			lastAction: { type: 'round', roundId: round.id }
-		},
-		rounds: { ...rounds, [round.id]: round }
-	};
+	const standings = activeStandings(state);
+	const plan = generateFinalRoundPlan(standings, state.tournament.courtCount, pairingStyle);
+	return appendRound(state, plan);
 }
 
 export function recordScore(
