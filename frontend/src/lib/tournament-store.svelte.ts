@@ -3,6 +3,7 @@ import {
 	addPlayer as addPlayerAction,
 	createTournament as createTournamentAction,
 	editRoundAssignment as editRoundAssignmentAction,
+	generateFinalRound as generateFinalRoundAction,
 	generateNextRound as generateNextRoundAction,
 	goToRound as goToRoundAction,
 	recordScore as recordScoreAction,
@@ -12,7 +13,21 @@ import {
 	undoLastAction as undoLastActionAction
 } from './tournament-actions';
 import { computeStandings, rankStandings } from './standings';
-import type { PlayerStanding, Round, Tournament, TournamentActionsState } from './types';
+import type {
+	FinalRoundPairingStyle,
+	PlayerStanding,
+	Round,
+	Tournament,
+	TournamentActionsState,
+	TournamentSettings
+} from './types';
+
+const DEFAULT_SETTINGS: TournamentSettings = {
+	darkMode: false,
+	pairingFormat: 'mexicano',
+	scoringMode: 'firstTo',
+	finalRoundPairingStyle: 'standard'
+};
 
 const TOURNAMENT_KEY = 'americano:tournament';
 const roundKey = (id: string) => `americano:round:${id}`;
@@ -22,7 +37,10 @@ class TournamentStore {
 	private roundStates = new Map<string, PersistedState<Round>>();
 
 	get tournament(): Tournament | null {
-		return this.tournamentState.current;
+		const t = this.tournamentState.current;
+		if (!t) return t;
+		// Defensive defaults for tournaments persisted before these settings existed.
+		return { ...t, settings: { ...DEFAULT_SETTINGS, ...t.settings } };
 	}
 
 	get currentRound(): Round | undefined {
@@ -78,8 +96,13 @@ class TournamentStore {
 		}
 	}
 
-	startTournament(name: string, courtCount: number, targetScore: number) {
-		this.tournamentState.current = createTournamentAction(name, courtCount, targetScore);
+	startTournament(
+		name: string,
+		courtCount: number,
+		targetScore: number,
+		settings?: Partial<TournamentSettings>
+	) {
+		this.tournamentState.current = createTournamentAction(name, courtCount, targetScore, settings);
 	}
 
 	endTournament() {
@@ -88,9 +111,9 @@ class TournamentStore {
 		this.tournamentState.current = null;
 	}
 
-	addPlayer(name: string) {
+	addPlayer(name: string, startingPoints = 0) {
 		if (!this.tournament) return;
-		this.tournamentState.current = addPlayerAction(this.tournament, name);
+		this.tournamentState.current = addPlayerAction(this.tournament, name, startingPoints);
 	}
 
 	removePlayer(id: string) {
@@ -112,6 +135,13 @@ class TournamentStore {
 		const t = this.tournament;
 		if (!t) return;
 		const result = generateNextRoundAction({ tournament: t, rounds: this.collectRounds(t) });
+		this.apply(result, t.roundIds);
+	}
+
+	generateFinalRound(pairingStyle: FinalRoundPairingStyle) {
+		const t = this.tournament;
+		if (!t) return;
+		const result = generateFinalRoundAction({ tournament: t, rounds: this.collectRounds(t) }, pairingStyle);
 		this.apply(result, t.roundIds);
 	}
 
