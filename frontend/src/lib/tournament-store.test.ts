@@ -89,3 +89,23 @@ describe('device preferences', () => {
 		expect(store.tournament?.courtLabels[2]?.teamB).toBeUndefined();
 	});
 });
+
+describe('Zoezi roster imports', () => {
+	const data = { version: 1 as const, origin: 'https://korpenkalmarpickleballklubb.zoezi.se' as const,
+		workout: { id: 266, title: 'Pickleball', startTime: '2026-10-10 11:00:00' },
+		participants: [{ id: 18, name: 'Example Member' }] };
+	test('persists source identity and blocks imports into finalized tournaments', () => {
+		let store = new TournamentStore();
+		expect(() => store.importZoezi(data, [])).toThrow();
+		store.startTournament('Night', 1, 11);
+		store.importZoezi(data, [{ memberId: 18, action: 'add' }], 5);
+		store = new TournamentStore();
+		store.importZoezi(data, [{ memberId: 18, action: 'add' }]);
+		expect(store.tournament?.players).toHaveLength(1);
+		expect(store.tournament?.players[0].startingPoints).toBe(5);
+		for (const name of ['B', 'C', 'D']) store.addPlayer(name);
+		store.generateFinalRound('standard');
+		expect(store.isFinalized).toBe(true);
+		expect(() => store.importZoezi(data, [])).toThrow();
+	});
+});

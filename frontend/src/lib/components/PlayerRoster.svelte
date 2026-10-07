@@ -1,4 +1,5 @@
 <script lang="ts">
+	import ZoeziImport from './ZoeziImport.svelte';
 	import { tournamentStore } from '$lib/tournament-store.svelte';
 
 	let tournament = $derived(tournamentStore.tournament!);
@@ -42,6 +43,7 @@
 	<h2>Players ({activePlayers.length})</h2>
 
 	{#if !tournamentStore.isFinalized}
+	<ZoeziImport />
 	<form onsubmit={add} class="add-row">
 		<input placeholder="Add player name" bind:value={newName} />
 		<button type="submit">Add</button>

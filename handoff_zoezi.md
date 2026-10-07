@@ -4,10 +4,36 @@ topic: zoezi-player-import
 repo: /home/martin/dev/pickleball
 branch: main
 head: fb31cc3
-status: in-progress
+status: implemented-awaiting-member-browser-check
 ---
 
 # Import Zoezi registrations into the pickleball app
+
+## Implementation update — 2026-10-07
+
+Implemented in the `zoezi-api` worktree. Earlier research notes below describe the
+state before implementation.
+
+- `frontend/src/lib/zoezi/helper.js.txt`: self-contained bookmarklet using the member's
+  same-origin login; Stockholm date, session picker, confirmed-player preview,
+  versioned JSON export, and manual-copy fallback.
+- `frontend/src/lib/components/ZoeziImport.svelte`: installation instructions and
+  paste/preview/import UI under Players. Explicit resolution of matching manual
+  names, existing-member skips, and starting points for new players during play.
+- `frontend/src/lib/zoezi/import.ts`: bounded payload validation and atomic roster
+  updates. Club/member identity persists on players; same-name members stay distinct.
+- Store rejects imports after the tournament is finalized. Existing players,
+  scores, and inactive status are preserved.
+- Verification: 71 tests pass; Svelte check reports zero errors/warnings; production
+  builds pass at root and `BASE_PATH=/hatstore-pickleball`; diff whitespace check passes.
+- Isolated Brave browser verified actual bookmark URL execution, helper-to-app
+  transfer with synthetic participants, queue exclusion, explicit linking, same-name
+  players, persistence after reload, repeat-import skips, and mobile layout.
+- A separate logged-out browser executed the helper on the real club homepage,
+  loaded today's public session, and verified the login-required participant message.
+- Still unverified: fetching real participant names while logged in as a member and
+  importing that real export. No account credentials were accessed. No deployment.
+- Local development server was left running at `http://127.0.0.1:5174/` for testing.
 
 ## Goal
 Build a browser helper that uses the user's existing Zoezi member login to fetch

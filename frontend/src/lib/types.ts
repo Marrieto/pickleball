@@ -31,6 +31,7 @@ export interface RoundPlan {
 }
 
 export interface Player {
+	zoezi?: { origin: string; memberId: number; workoutId: number };
 	id: string;
 	name: string;
 	active: boolean;

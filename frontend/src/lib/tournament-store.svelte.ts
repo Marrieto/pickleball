@@ -1,4 +1,5 @@
 import { PersistedState } from 'runed';
+import { applyImport, type ZoeziImport, type ImportChoice } from './zoezi/import';
 import {
 	addPlayer as addPlayerAction,
 	createTournament as createTournamentAction,
@@ -143,6 +144,11 @@ export class TournamentStore {
 	addPlayer(name: string, startingPoints = 0) {
 		if (!this.tournament || this.isFinalized) return;
 		this.tournamentState.current = addPlayerAction(this.tournament, name, startingPoints);
+	}
+
+	importZoezi(data: ZoeziImport, choices: ImportChoice[], startingPoints = 0) {
+		if (!this.tournament || this.isFinalized) throw new Error('Import requires an unfinished tournament.');
+		this.tournamentState.current = applyImport(this.tournament, data, choices, startingPoints);
 	}
 
 	removePlayer(id: string) {
