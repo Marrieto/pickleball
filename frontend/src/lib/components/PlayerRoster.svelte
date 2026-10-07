@@ -285,28 +285,34 @@
 		flex-wrap: wrap;
 		gap: 0.4rem;
 	}
+	/* The pill owns the border and radius; the two buttons inside are borderless and
+	   stretched to its height, so the halves can't disagree about size or baseline. */
 	ul.chips li {
+		align-items: stretch;
 		gap: 0;
 		padding: 0;
+		border: 1px solid var(--border);
+		border-radius: 999px;
+		background: var(--bg);
+		overflow: hidden;
+	}
+	.chip,
+	.forget {
+		display: flex;
+		align-items: center;
+		border: none;
 		background: transparent;
+		font-size: 0.875rem;
+		line-height: 1.2;
+		padding: 0.4rem 0.8rem;
 	}
 	.chip {
-		padding: 0.4rem 0.6rem;
-		border: 1px solid var(--border);
-		border-right: none;
-		border-radius: 999px 0 0 999px;
-		background: var(--bg);
 		color: var(--text);
-		font-size: 0.875rem;
 	}
 	.forget {
-		padding: 0.4rem 0.55rem;
-		border: 1px solid var(--border);
-		border-radius: 0 999px 999px 0;
-		background: var(--bg);
+		border-left: 1px solid var(--border);
+		padding-inline: 0.6rem;
 		color: var(--text-muted);
-		font-size: 0.75rem;
-		line-height: 1;
 	}
 	.forget:hover {
 		color: var(--danger);
