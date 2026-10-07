@@ -17,7 +17,7 @@
 		e.preventDefault();
 		const trimmed = newName.trim();
 		if (!trimmed) return;
-		if (gameInProgress) {
+		if (gameInProgress && !tournamentStore.isTeamMode) {
 			pendingName = trimmed;
 			startingPoints = suggestedStartingPoints();
 			return;
@@ -35,6 +35,10 @@
 
 	function cancelAdd() {
 		pendingName = null;
+	}
+
+	function readd(id: string, name: string) {
+		tournamentStore.addPlayer(name, gameInProgress ? suggestedStartingPoints() : 0, id);
 	}
 </script>
 
@@ -68,7 +72,7 @@
 		{#each activePlayers as player (player.id)}
 			<li>
 				<span class="name">{player.name}</span>
-				{#if !tournamentStore.isFinalized}
+				{#if !tournamentStore.isFinalized && !tournamentStore.isTeamMode}
 				<label class="bench">
 					<input
 						type="checkbox"
@@ -77,6 +81,8 @@
 					/>
 					sitting out next round
 				</label>
+				{/if}
+				{#if !tournamentStore.isFinalized}
 				<button
 					class="remove"
 					onclick={() => tournamentStore.removePlayer(player.id)}
@@ -87,9 +93,37 @@
 				{/if}
 			</li>
 		{:else}
-			<li class="empty">No players yet — add at least 4 to start a round.</li>
+			<li class="empty">
+					No players yet — add at least 4{tournamentStore.isTeamMode
+						? ', then pair them into teams'
+						: ' to start a round'}.
+				</li>
 		{/each}
 	</ul>
+
+	{#if tournamentStore.availableRoster.length > 0 && !tournamentStore.isFinalized}
+		<div class="previous">
+			<h3>Played before</h3>
+			<p class="hint">Tap to add them back tonight.</p>
+			<ul class="chips">
+				{#each tournamentStore.availableRoster as entry (entry.id)}
+					<li>
+						<button class="chip" onclick={() => readd(entry.id, entry.name)}>
+							+ {entry.name}
+						</button>
+						<button
+							class="forget"
+							onclick={() => tournamentStore.forgetRosterPlayer(entry.id)}
+							aria-label="Forget {entry.name}"
+							title="Forget {entry.name} on this device"
+						>
+							✕
+						</button>
+					</li>
+				{/each}
+			</ul>
+		</div>
+	{/if}
 </section>
 
 <style>
@@ -233,6 +267,48 @@
 		padding: 0.25rem;
 	}
 	.remove:hover {
+		color: var(--danger);
+	}
+	.previous {
+		display: flex;
+		flex-direction: column;
+		gap: 0.4rem;
+		border-top: 1px solid var(--border);
+		padding-top: 0.9rem;
+	}
+	.previous h3 {
+		margin: 0;
+		font-size: 0.875rem;
+	}
+	ul.chips {
+		flex-direction: row;
+		flex-wrap: wrap;
+		gap: 0.4rem;
+	}
+	ul.chips li {
+		gap: 0;
+		padding: 0;
+		background: transparent;
+	}
+	.chip {
+		padding: 0.4rem 0.6rem;
+		border: 1px solid var(--border);
+		border-right: none;
+		border-radius: 999px 0 0 999px;
+		background: var(--bg);
+		color: var(--text);
+		font-size: 0.875rem;
+	}
+	.forget {
+		padding: 0.4rem 0.55rem;
+		border: 1px solid var(--border);
+		border-radius: 0 999px 999px 0;
+		background: var(--bg);
+		color: var(--text-muted);
+		font-size: 0.75rem;
+		line-height: 1;
+	}
+	.forget:hover {
 		color: var(--danger);
 	}
 </style>

@@ -3,9 +3,11 @@
 	import SetupForm from '$lib/components/SetupForm.svelte';
 	import TopBar from '$lib/components/TopBar.svelte';
 	import PlayerRoster from '$lib/components/PlayerRoster.svelte';
+	import TeamRoster from '$lib/components/TeamRoster.svelte';
 	import RoundView from '$lib/components/RoundView.svelte';
 	import Leaderboard from '$lib/components/Leaderboard.svelte';
-	let panel = $state<'leaderboard' | 'players'>('leaderboard');
+	let panel = $state<'leaderboard' | 'players' | 'teams'>('leaderboard');
+	const PANEL_TITLES = { leaderboard: 'Leaderboard', players: 'Players', teams: 'Teams' };
 	let modal = $state<HTMLDialogElement>();
 	function openPanel(next: typeof panel) {
 		panel = next;
@@ -30,17 +32,24 @@
 			<div class="panel-tools">
 				<button onclick={() => openPanel('leaderboard')}>Leaderboard</button>
 				<button onclick={() => openPanel('players')}>Players</button>
+				{#if tournamentStore.isTeamMode}
+					<button class:attention={!tournamentStore.canGenerateRound} onclick={() => openPanel('teams')}>
+						Teams
+					</button>
+				{/if}
 			</div>
 			<RoundView />
 		</div>
 	</main>
-	<dialog bind:this={modal} onclick={closeOnBackdrop} aria-label={panel === 'leaderboard' ? 'Leaderboard' : 'Players'}>
+	<dialog bind:this={modal} onclick={closeOnBackdrop} aria-label={PANEL_TITLES[panel]}>
 		<div class="modal-header">
-			<strong>{panel === 'leaderboard' ? 'Leaderboard' : 'Players'}</strong>
+			<strong>{PANEL_TITLES[panel]}</strong>
 			<button onclick={() => modal?.close()} aria-label="Close panel">Close ✕</button>
 		</div>
 		{#if panel === 'leaderboard'}
 			<Leaderboard />
+		{:else if panel === 'teams'}
+			<TeamRoster />
 		{:else}
 			<PlayerRoster />
 		{/if}
@@ -76,6 +85,12 @@
 		border-radius: 10px;
 		background: var(--surface);
 		color: var(--text);
+	}
+	/* Flags that teams need fixing before a round can be generated. */
+	button.attention {
+		border-color: var(--danger);
+		color: var(--danger);
+		font-weight: 600;
 	}
 	dialog {
 		width: min(35rem, calc(100% - 1.5rem));

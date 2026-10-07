@@ -1,12 +1,7 @@
 <script lang="ts">
 	import { tournamentStore } from '$lib/tournament-store.svelte';
 
-	let tournament = $derived(tournamentStore.tournament!);
 	let standings = $derived(tournamentStore.standings);
-
-	function playerName(id: string): string {
-		return tournament.players.find((p) => p.id === id)?.name ?? '?';
-	}
 </script>
 
 <section class="card leaderboard">
@@ -22,7 +17,7 @@
 				<thead>
 					<tr>
 						<th>#</th>
-						<th>Player</th>
+						<th>{tournamentStore.isTeamMode ? 'Team' : 'Player'}</th>
 						<th>Pts</th>
 						<th title="Points per game played - fair to compare across players who've sat out more">
 							Adj
@@ -36,7 +31,7 @@
 					{#each standings as s, i (s.id)}
 						<tr>
 							<td>{i + 1}</td>
-							<td>{playerName(s.id)}</td>
+							<td>{tournamentStore.displayName(s.id)}</td>
 							<td>{s.totalPoints}</td>
 							<td>{s.adjustedScore.toFixed(1)}</td>
 							<td>{s.wins}</td>

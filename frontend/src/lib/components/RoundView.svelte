@@ -10,6 +10,22 @@
 	let isLatest = $derived(tournament.currentRoundIndex === tournament.roundIds.length - 1);
 	let isLocked = $derived(round ? round.courts.some((c) => c.score) : false);
 	let activeCount = $derived(tournament.players.filter((p) => p.active).length);
+	let isTeamMode = $derived(tournamentStore.isTeamMode);
+	let canGenerate = $derived(
+		isTeamMode ? tournamentStore.canGenerateRound : activeCount >= 4
+	);
+	let blockedReason = $derived(blockReason());
+
+	function blockReason(): string | null {
+		if (!isTeamMode) return activeCount < 4 ? 'Add at least 4 players first.' : null;
+		const { unassignedPlayerIds, playableTeamCount } = tournamentStore.teamValidation;
+		if (unassignedPlayerIds.length > 0) {
+			const names = unassignedPlayerIds.map((id) => tournamentStore.displayName(id)).join(', ');
+			return `${names} ${unassignedPlayerIds.length === 1 ? 'has' : 'have'} no partner — pair up in the Teams panel.`;
+		}
+		if (playableTeamCount < 2) return 'Pair up at least two teams in the Teams panel.';
+		return null;
+	}
 
 	let editing = $state(false);
 	let selected = $state<string | null>(null);
@@ -42,6 +58,13 @@
 		return tournament.players.find((p) => p.id === id)?.name ?? '?';
 	}
 
+	/** Court chips: one per player normally, one per whole team when pairs are fixed. */
+	function sideUnits(match: CourtMatch, side: 'A' | 'B'): string[] {
+		if (!isTeamMode) return side === 'A' ? match.teamA : match.teamB;
+		const id = side === 'A' ? match.teamAId : match.teamBId;
+		return id ? [id] : [];
+	}
+
 	function findSlot(
 		courts: CourtMatch[],
 		id: string
@@ -55,6 +78,62 @@
 		return null;
 	}
 
+	function findTeamSlot(courts: CourtMatch[], teamId: string): { court: number; team: 'A' | 'B' } | null {
+		for (const c of courts) {
+			if (c.teamAId === teamId) return { court: c.court, team: 'A' };
+			if (c.teamBId === teamId) return { court: c.court, team: 'B' };
+		}
+		return null;
+	}
+
+	/** Teams-mode swap: whole pairs trade places. Moving a single player would dissolve two teams
+	 *  and desync the stored team id from the players actually on court. */
+	function swapTeams(teamX: string, teamY: string) {
+		if (!round) return;
+		const slotX = findTeamSlot(round.courts, teamX);
+		const slotY = findTeamSlot(round.courts, teamY);
+		if (!slotX || !slotY || teamX === teamY) return;
+
+		const courtX = round.courts.find((c) => c.court === slotX.court)!;
+		const courtY = round.courts.find((c) => c.court === slotY.court)!;
+		const sideOf = (c: CourtMatch, side: 'A' | 'B') =>
+			side === 'A'
+				? { players: c.teamA, id: c.teamAId }
+				: { players: c.teamB, id: c.teamBId };
+
+		const unitX = sideOf(courtX, slotX.team);
+		const unitY = sideOf(courtY, slotY.team);
+
+		const write = (
+			court: CourtMatch,
+			side: 'A' | 'B',
+			unit: { players: [string, string]; id: string | undefined },
+			other?: { side: 'A' | 'B'; unit: { players: [string, string]; id: string | undefined } }
+		) => {
+			let teamA = side === 'A' ? unit.players : court.teamA;
+			let teamB = side === 'B' ? unit.players : court.teamB;
+			let teamAId = side === 'A' ? unit.id : court.teamAId;
+			let teamBId = side === 'B' ? unit.id : court.teamBId;
+			if (other) {
+				if (other.side === 'A') {
+					teamA = other.unit.players;
+					teamAId = other.unit.id;
+				} else {
+					teamB = other.unit.players;
+					teamBId = other.unit.id;
+				}
+			}
+			tournamentStore.editRoundAssignment(round!.id, court.court, teamA, teamB, { teamAId, teamBId });
+		};
+
+		if (slotX.court === slotY.court) {
+			write(courtX, slotX.team, unitY, { side: slotY.team, unit: unitX });
+		} else {
+			write(courtX, slotX.team, unitY);
+			write(courtY, slotY.team, unitX);
+		}
+	}
+
 	function selectPlayer(id: string) {
 		if (!editing) return;
 		if (selected === id) {
@@ -65,7 +144,8 @@
 			selected = id;
 			return;
 		}
-		swap(selected, id);
+		if (isTeamMode) swapTeams(selected, id);
+		else swap(selected, id);
 		selected = null;
 	}
 
@@ -97,15 +177,21 @@
 
 <dialog bind:this={finalRoundDialog} class="card final-round-picker" aria-labelledby="final-round-title" onclick={closeFinalRoundOnBackdrop}>
 	<div class="picker-content">
-		<h2 id="final-round-title">Final round pairing</h2>
-		<label>
-			<input type="radio" bind:group={finalRoundPairingStyle} value="standard" />
-			<span><strong>Standard</strong><span>1st + 4th vs 2nd + 3rd</span></span>
-		</label>
-		<label>
-			<input type="radio" bind:group={finalRoundPairingStyle} value="alternate" />
-			<span><strong>Alternate</strong><span>1st + 3rd vs 2nd + 4th</span></span>
-		</label>
+		<h2 id="final-round-title">{tournamentStore.isTeamMode ? 'Final round' : 'Final round pairing'}</h2>
+		{#if tournamentStore.isTeamMode}
+			<p class="picker-hint">
+				The top teams play off — 1st vs 2nd on court 1, 3rd vs 4th on court 2, and so on.
+			</p>
+		{:else}
+			<label>
+				<input type="radio" bind:group={finalRoundPairingStyle} value="standard" />
+				<span><strong>Standard</strong><span>1st + 4th vs 2nd + 3rd</span></span>
+			</label>
+			<label>
+				<input type="radio" bind:group={finalRoundPairingStyle} value="alternate" />
+				<span><strong>Alternate</strong><span>1st + 3rd vs 2nd + 4th</span></span>
+			</label>
+		{/if}
 		<div class="picker-actions">
 			<button onclick={() => finalRoundDialog.close()}>Cancel</button>
 			<button class="primary" onclick={confirmFinalRound}>Confirm</button>
@@ -145,7 +231,7 @@
 		{/if}
 
 		{#if round.sittingOut.length > 0}
-			<p class="sitting-out">Sitting out: {round.sittingOut.map(playerName).join(', ')}</p>
+			<p class="sitting-out">Sitting out: {round.sittingOut.map((id) => tournamentStore.displayName(id)).join(', ')}</p>
 		{/if}
 
 		{#key round.id}
@@ -161,13 +247,13 @@
 								<div class="side-label">{tournament.courtLabels[match.court]?.teamA}</div>
 							{/if}
 							<div class="editable-team">
-								{#each match.teamA as id (id)}
+								{#each sideUnits(match, 'A') as id (id)}
 									<button
 										class="chip"
 										class:selected={selected === id}
 										onclick={() => selectPlayer(id)}
 									>
-										{playerName(id)}
+										{tournamentStore.displayName(id)}
 									</button>
 								{/each}
 							</div>
@@ -176,13 +262,13 @@
 								<div class="side-label">{tournament.courtLabels[match.court]?.teamB}</div>
 							{/if}
 							<div class="editable-team">
-								{#each match.teamB as id (id)}
+								{#each sideUnits(match, 'B') as id (id)}
 									<button
 										class="chip"
 										class:selected={selected === id}
 										onclick={() => selectPlayer(id)}
 									>
-										{playerName(id)}
+										{tournamentStore.displayName(id)}
 									</button>
 								{/each}
 							</div>
@@ -207,11 +293,20 @@
 
 		{#if isLatest && !tournamentStore.isFinalized}
 			<div class="round-actions">
-				<button class="primary generate" onclick={() => tournamentStore.generateNextRound()}>
+				<button
+					class="primary generate"
+					onclick={() => tournamentStore.generateNextRound()}
+					disabled={!canGenerate}
+				>
 					Generate next round
 				</button>
-				<button class="secondary" onclick={openFinalRoundPicker}> Generate Final Round </button>
+				<button class="secondary" onclick={openFinalRoundPicker} disabled={!canGenerate}>
+					Generate Final Round
+				</button>
 			</div>
+			{#if blockedReason}
+				<p class="blocked">{blockedReason}</p>
+			{/if}
 		{/if}
 	</section>
 {:else}
@@ -220,20 +315,34 @@
 		<button
 			class="primary"
 			onclick={() => tournamentStore.generateNextRound()}
-			disabled={activeCount < 4}
+			disabled={!canGenerate}
 		>
 			Generate round 1
 		</button>
-		<button class="secondary" onclick={openFinalRoundPicker} disabled={activeCount < 4}>
+		<button class="secondary" onclick={openFinalRoundPicker} disabled={!canGenerate}>
 			Generate Final Round
 		</button>
-		{#if activeCount < 4}
-			<p class="hint">Add at least 4 players first.</p>
+		{#if blockedReason}
+			<p class="hint">{blockedReason}</p>
 		{/if}
 	</div>
 {/if}
 
 <style>
+	.blocked {
+		margin: 0;
+		padding: 0.6rem 0.7rem;
+		border-radius: 10px;
+		border: 1px solid var(--danger);
+		color: var(--danger);
+		font-size: 0.8rem;
+		text-align: center;
+	}
+	.picker-hint {
+		margin: 0;
+		color: var(--text-muted);
+		font-size: 0.875rem;
+	}
 	.round {
 		display: flex;
 		flex-direction: column;

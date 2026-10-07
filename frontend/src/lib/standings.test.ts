@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
-import { computeStandings, rankStandings } from './standings';
-import type { Player, PlayerStanding, Round } from './types';
+import { computeStandings, computeTeamStandings, rankStandings } from './standings';
+import type { Player, PlayerStanding, Round, Team } from './types';
 
 function player(id: string, name = id, startingPoints = 0): Player {
 	return { id, name, active: true, startingPoints };
@@ -244,5 +244,67 @@ describe('rankStandings', () => {
 		const ranked = rankStandings(standings);
 
 		expect(ranked.map((s) => s.id)).toEqual(['Waitman', 'Four']);
+	});
+});
+
+function team(id: string, a: string, b: string, startingPoints = 0): Team {
+	return { id, playerIds: [a, b], active: true, startingPoints };
+}
+
+describe('computeTeamStandings', () => {
+	const teams = [team('t1', 'a', 'b'), team('t2', 'c', 'd')];
+
+	const played = round({
+		roundNumber: 1,
+		courts: [
+			{
+				court: 1,
+				teamA: ['a', 'b'],
+				teamB: ['c', 'd'],
+				teamAId: 't1',
+				teamBId: 't2',
+				score: { teamAPoints: 11, teamBPoints: 7 }
+			}
+		]
+	});
+
+	test('accumulates each team own points, wins and games', () => {
+		const [t1, t2] = computeTeamStandings(teams, [played]);
+		expect(t1).toMatchObject({ id: 't1', totalPoints: 11, wins: 1, gamesPlayed: 1 });
+		expect(t2).toMatchObject({ id: 't2', totalPoints: 7, wins: 0, gamesPlayed: 1 });
+	});
+
+	test('seeds totalPoints from the team starting offset', () => {
+		const [t1] = computeTeamStandings([team('t1', 'a', 'b', 5), teams[1]], [played]);
+		expect(t1.totalPoints).toBe(16);
+	});
+
+	test('counts sit-outs by team id', () => {
+		const rounds = [played, round({ roundNumber: 2, sittingOut: ['t2'] })];
+		const [t1, t2] = computeTeamStandings(teams, rounds);
+		expect(t1.timesSatOut).toBe(0);
+		expect(t2.timesSatOut).toBe(1);
+	});
+
+	test('tracks roundsSincePlayed across rounds the team missed', () => {
+		const rounds = [played, round({ roundNumber: 2, sittingOut: ['t1', 't2'] })];
+		const [t1] = computeTeamStandings(teams, rounds);
+		expect(t1.roundsSincePlayed).toBe(1);
+	});
+
+	test('a court without team ids contributes nothing, even when the same players are on it', () => {
+		const individualRound = round({
+			roundNumber: 1,
+			courts: [
+				{
+					court: 1,
+					teamA: ['a', 'b'],
+					teamB: ['c', 'd'],
+					score: { teamAPoints: 11, teamBPoints: 7 }
+				}
+			]
+		});
+		const [t1] = computeTeamStandings(teams, [individualRound]);
+		expect(t1).toMatchObject({ totalPoints: 0, gamesPlayed: 0, wins: 0 });
 	});
 });

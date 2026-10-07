@@ -9,10 +9,16 @@
 			? `best of ${tournament.targetScore}`
 			: `first to ${tournament.targetScore}`
 	);
-	let formatLabel = $derived(tournament.settings.pairingFormat === 'americano' ? 'Americano' : 'Mexicano');
+	let formatLabel = $derived(
+		tournament.settings.entryMode === 'teams'
+			? `Teams · ${tournament.settings.pairingFormat === 'americano' ? 'Rotation' : 'Rank'}`
+			: tournament.settings.pairingFormat === 'americano'
+				? 'Americano'
+				: 'Mexicano'
+	);
 
 	function endTournament() {
-		if (confirm('End this tournament? This clears it from this device.')) {
+		if (confirm('End this tournament? Rounds and scores are cleared. Player names are kept for next time.')) {
 			tournamentStore.endTournament();
 		}
 	}

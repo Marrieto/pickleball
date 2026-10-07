@@ -1,13 +1,16 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import {
 	addPlayer,
+	createTeam,
 	createTournament,
+	disbandTeam,
 	editRoundAssignment,
 	generateFinalRound,
 	generateNextRound,
 	goToRound,
 	recordScore,
 	removePlayer,
+	renameTeam,
 	setCourtLabel,
 	togglePendingBench,
 	undoLastAction
@@ -339,5 +342,171 @@ describe('goToRound', () => {
 		expect(goToRound(state.tournament, -5).currentRoundIndex).toBe(0);
 		expect(goToRound(state.tournament, 0).currentRoundIndex).toBe(0);
 		expect(goToRound(state.tournament, 99).currentRoundIndex).toBe(1);
+	});
+});
+
+function teamTournament(playerCount: number, courtCount: number): TournamentActionsState {
+	let tournament = createTournament('T', courtCount, 8, { entryMode: 'teams' });
+	for (let i = 0; i < playerCount; i++) tournament = addPlayer(tournament, `P${i}`);
+	return { tournament, rounds: {} };
+}
+
+/** Pairs players up two at a time: P0+P1, P2+P3, ... */
+function pairAll(state: TournamentActionsState): TournamentActionsState {
+	let { tournament } = state;
+	const ids = tournament.players.filter((p) => p.active).map((p) => p.id);
+	for (let i = 0; i + 1 < ids.length; i += 2) {
+		tournament = createTeam(tournament, ids[i], ids[i + 1]);
+	}
+	return { ...state, tournament };
+}
+
+describe('teams mode - defaults and CRUD', () => {
+	test('a new tournament defaults to individual mode with no teams', () => {
+		const tournament = createTournament('T', 2, 11);
+		expect(tournament.settings.entryMode).toBe('individual');
+		expect(tournament.teams).toEqual([]);
+	});
+
+	test('createTeam refuses a player who is already on an active team', () => {
+		const { tournament } = teamTournament(4, 1);
+		const [p0, p1, p2] = tournament.players.map((p) => p.id);
+		const once = createTeam(tournament, p0, p1);
+		const twice = createTeam(once, p0, p2);
+		expect(twice.teams).toHaveLength(1);
+	});
+
+	test('createTeam refuses an inactive player and refuses pairing someone with themselves', () => {
+		const { tournament } = teamTournament(4, 1);
+		const [p0, p1] = tournament.players.map((p) => p.id);
+		expect(createTeam(tournament, p0, p0).teams).toEqual([]);
+		expect(createTeam(removePlayer(tournament, p1), p0, p1).teams).toEqual([]);
+	});
+
+	test('disbandTeam soft-deletes and clears the team from pending benches', () => {
+		let { tournament } = teamTournament(4, 1);
+		const [p0, p1] = tournament.players.map((p) => p.id);
+		tournament = createTeam(tournament, p0, p1);
+		const teamId = tournament.teams[0].id;
+		tournament = togglePendingBench(tournament, teamId);
+		tournament = disbandTeam(tournament, teamId);
+
+		expect(tournament.teams[0].active).toBe(false);
+		expect(tournament.pendingBenchIds).not.toContain(teamId);
+	});
+
+	test('renameTeam sets and clears a custom name', () => {
+		let { tournament } = teamTournament(2, 1);
+		const [p0, p1] = tournament.players.map((p) => p.id);
+		tournament = createTeam(tournament, p0, p1);
+		const teamId = tournament.teams[0].id;
+		expect(renameTeam(tournament, teamId, ' Dinkers ').teams[0].name).toBe('Dinkers');
+		expect(renameTeam(tournament, teamId, '   ').teams[0].name).toBeUndefined();
+	});
+
+	test('removing a player disbands their team, freeing the partner', () => {
+		let { tournament } = teamTournament(4, 1);
+		const [p0, p1] = tournament.players.map((p) => p.id);
+		tournament = createTeam(tournament, p0, p1);
+		tournament = removePlayer(tournament, p1);
+
+		expect(tournament.teams[0].active).toBe(false);
+		expect(tournament.players.find((p) => p.id === p0)!.active).toBe(true);
+	});
+});
+
+describe('teams mode - round generation', () => {
+	test('generating is blocked while a player has no partner', () => {
+		const state = pairAll(teamTournament(5, 2));
+		expect(generateNextRound(state)).toBe(state);
+		expect(generateFinalRound(state, 'standard')).toBe(state);
+	});
+
+	test('generating is blocked with fewer than two teams', () => {
+		const state = pairAll(teamTournament(2, 1));
+		expect(generateNextRound(state)).toBe(state);
+	});
+
+	test('a team round stores both team ids on every court', () => {
+		const state = pairAll(teamTournament(8, 2));
+		const result = generateNextRound(state);
+		const round = result.rounds[result.tournament.roundIds[0]];
+
+		expect(round.courts).toHaveLength(2);
+		for (const court of round.courts) {
+			expect(court.teamAId).toBeDefined();
+			expect(court.teamBId).toBeDefined();
+		}
+	});
+
+	test('a court pairs two whole teams, never splitting one', () => {
+		const state = pairAll(teamTournament(8, 2));
+		const result = generateNextRound(state);
+		const round = result.rounds[result.tournament.roundIds[0]];
+		const byId = new Map(state.tournament.teams.map((t) => [t.id, t]));
+
+		for (const court of round.courts) {
+			expect(court.teamA).toEqual(byId.get(court.teamAId!)!.playerIds);
+			expect(court.teamB).toEqual(byId.get(court.teamBId!)!.playerIds);
+		}
+	});
+
+	test('sitting out holds team ids, and a benched team is excluded', () => {
+		let state = pairAll(teamTournament(12, 2));
+		const benchedTeamId = state.tournament.teams[0].id;
+		state = { ...state, tournament: togglePendingBench(state.tournament, benchedTeamId) };
+
+		const result = generateNextRound(state);
+		const round = result.rounds[result.tournament.roundIds[0]];
+
+		expect(round.sittingOut).toContain(benchedTeamId);
+		expect(round.courts.flatMap((c) => [c.teamAId, c.teamBId])).not.toContain(benchedTeamId);
+	});
+
+	test('the team final seeds the top two teams onto court 1', () => {
+		let state = pairAll(teamTournament(8, 2));
+		state = generateNextRound(state);
+		const firstRoundId = state.tournament.roundIds[0];
+		state = recordScore(state, firstRoundId, 1, 8, 2);
+
+		const result = generateFinalRound(state, 'standard');
+		const final = result.rounds[result.tournament.roundIds.at(-1)!];
+		const winner = state.rounds[firstRoundId].courts[0].teamAId;
+
+		expect(final.isFinal).toBe(true);
+		expect(final.courts[0].teamAId).toBe(winner);
+	});
+
+	test('undo after a team round restores pending benches holding team ids', () => {
+		let state = pairAll(teamTournament(12, 2));
+		const benchedTeamId = state.tournament.teams[0].id;
+		state = { ...state, tournament: togglePendingBench(state.tournament, benchedTeamId) };
+		state = generateNextRound(state);
+		expect(state.tournament.pendingBenchIds).toEqual([]);
+
+		const undone = undoLastAction(state);
+		expect(undone.tournament.pendingBenchIds).toEqual([benchedTeamId]);
+		expect(undone.tournament.roundIds).toEqual([]);
+	});
+
+	test('editRoundAssignment moves the team ids along with the players', () => {
+		let state = pairAll(teamTournament(8, 2));
+		state = generateNextRound(state);
+		const roundId = state.tournament.roundIds[0];
+		const [courtOne, courtTwo] = state.rounds[roundId].courts;
+
+		const result = editRoundAssignment(
+			state,
+			roundId,
+			1,
+			courtTwo.teamA,
+			courtOne.teamB,
+			{ teamAId: courtTwo.teamAId, teamBId: courtOne.teamBId }
+		);
+		const updated = result.rounds[roundId].courts[0];
+
+		expect(updated.teamAId).toBe(courtTwo.teamAId);
+		expect(updated.teamA).toEqual(courtTwo.teamA);
+		expect(updated.teamBId).toBe(courtOne.teamBId);
 	});
 });

@@ -5,7 +5,8 @@ import type {
 	PairingFormat,
 	PlayerStanding,
 	Round,
-	RoundPlan
+	RoundPlan,
+	Standing
 } from './types';
 
 export function partnerKey(a: string, b: string): string {
@@ -26,7 +27,7 @@ export function computePartnerCounts(rounds: Round[]): Map<string, number> {
 	return counts;
 }
 
-function shuffle<T>(items: T[], random: () => number): T[] {
+export function shuffle<T>(items: T[], random: () => number): T[] {
 	const result = [...items];
 	for (let i = result.length - 1; i > 0; i--) {
 		const j = Math.floor(random() * (i + 1));
@@ -35,18 +36,20 @@ function shuffle<T>(items: T[], random: () => number): T[] {
 	return result;
 }
 
-/** Rest-priority selection: who plays this round vs. sits out. Shared by every pairing format. */
-function selectEligiblePlayers(
-	standings: PlayerStanding[],
+/** Rest-priority selection: which units play this round vs. sit out. Shared by every pairing format.
+ *  A unit is a player in individual mode (4 per court) or a fixed pair in teams mode (2 per court). */
+export function selectEligibleUnits(
+	standings: Standing[],
 	courtCount: number,
-	random: () => number
-): { selected: PlayerStanding[]; sittingOut: string[] } {
+	random: () => number,
+	unitsPerCourt = 4
+): { selected: Standing[]; sittingOut: string[] } {
 	const eligible = shuffle(
 		standings.filter((p) => !p.benched),
 		random
 	);
-	const playableCourts = Math.min(courtCount, Math.floor(eligible.length / 4));
-	const needed = playableCourts * 4;
+	const playableCourts = Math.min(courtCount, Math.floor(eligible.length / unitsPerCourt));
+	const needed = playableCourts * unitsPerCourt;
 
 	const byRest = [...eligible].sort((a, b) => {
 		if (b.roundsSincePlayed !== a.roundsSincePlayed) {
@@ -196,7 +199,7 @@ export function generateRound(
 		pairingStyle = 'standard',
 		random = Math.random
 	} = options;
-	const { selected, sittingOut } = selectEligiblePlayers(standings, courtCount, random);
+	const { selected, sittingOut } = selectEligibleUnits(standings, courtCount, random);
 	const courts =
 		format === 'americano'
 			? pairLeastRecentlyPartnered(selected, partnerCounts, random)

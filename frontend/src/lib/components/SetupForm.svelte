@@ -2,7 +2,7 @@
 	import { base } from '$app/paths';
 	import { tournamentStore } from '$lib/tournament-store.svelte';
 	import ThemeToggle from './ThemeToggle.svelte';
-	import type { PairingFormat, PairingStyle, ScoringMode } from '$lib/types';
+	import type { EntryMode, PairingFormat, PairingStyle, ScoringMode } from '$lib/types';
 
 	const SCORE_DEFAULTS: Record<ScoringMode, { default: number; min: number; max: number }> = {
 		firstTo: { default: 11, min: 2, max: 15 },
@@ -11,6 +11,7 @@
 
 	let name = $state('Pickleball Night');
 	let courtCount = $state(2);
+	let entryMode = $state<EntryMode>('individual');
 	let pairingFormat = $state<PairingFormat>('mexicano');
 	let pairingStyle = $state<PairingStyle>('standard');
 	let scoringMode = $state<ScoringMode>('firstTo');
@@ -24,6 +25,7 @@
 	function submit(e: SubmitEvent) {
 		e.preventDefault();
 		tournamentStore.startTournament(name.trim() || 'Tournament', courtCount, targetScore, {
+			entryMode,
 			pairingFormat,
 			pairingStyle,
 			scoringMode
@@ -44,9 +46,15 @@
 		<ThemeToggle />
 	</div>
 	<p class="hint">
-		{pairingFormat === 'americano'
-			? 'Americano format — partners rotate each round so everyone eventually partners with everyone.'
-			: 'Mexicano format — rounds are paired dynamically from current standings.'}
+		{#if entryMode === 'teams'}
+			{pairingFormat === 'americano'
+				? 'Fixed pairs — each team meets every other team once before any rematch.'
+				: 'Fixed pairs — teams are matched by standing, so the leaders meet on court 1.'}
+		{:else}
+			{pairingFormat === 'americano'
+				? 'Americano format — partners rotate each round so everyone eventually partners with everyone.'
+				: 'Mexicano format — rounds are paired dynamically from current standings.'}
+		{/if}
 	</p>
 
 	<label>
@@ -55,18 +63,30 @@
 	</label>
 
 	<fieldset>
-		<legend>Pairing format</legend>
+		<legend>Play as</legend>
 		<label class="choice">
-			<input type="radio" bind:group={pairingFormat} value="mexicano" />
-			Mexicano
+			<input type="radio" bind:group={entryMode} value="individual" />
+			Individuals
 		</label>
 		<label class="choice">
-			<input type="radio" bind:group={pairingFormat} value="americano" />
-			Americano
+			<input type="radio" bind:group={entryMode} value="teams" />
+			Fixed pairs
 		</label>
 	</fieldset>
 
-	{#if pairingFormat === 'mexicano'}
+	<fieldset>
+		<legend>{entryMode === 'teams' ? 'Matchmaking' : 'Pairing format'}</legend>
+		<label class="choice">
+			<input type="radio" bind:group={pairingFormat} value="mexicano" />
+			{entryMode === 'teams' ? 'Rank-based' : 'Mexicano'}
+		</label>
+		<label class="choice">
+			<input type="radio" bind:group={pairingFormat} value="americano" />
+			{entryMode === 'teams' ? 'Rotation' : 'Americano'}
+		</label>
+	</fieldset>
+
+	{#if pairingFormat === 'mexicano' && entryMode === 'individual'}
 		<fieldset>
 			<legend>Team pairing (also the final round's default)</legend>
 			<label class="choice">
