@@ -224,7 +224,7 @@ function standing(overrides: Partial<PlayerStanding> & { id: string }): PlayerSt
 }
 
 describe('rankStandings', () => {
-	test('ranks by total points first', () => {
+	test('ranks by adjusted score first, even when another player has more total points', () => {
 		const standings = [
 			standing({ id: 'A', totalPoints: 20, adjustedScore: 5 }),
 			standing({ id: 'B', totalPoints: 30, adjustedScore: 3 })
@@ -232,18 +232,62 @@ describe('rankStandings', () => {
 
 		const ranked = rankStandings(standings);
 
-		expect(ranked.map((s) => s.id)).toEqual(['B', 'A']);
+		expect(ranked.map((s) => s.id)).toEqual(['A', 'B']);
 	});
 
-	test('breaks a tie in total points using the higher adjusted score', () => {
+	test('breaks a tie in adjusted score with the most rounds played', () => {
 		const standings = [
-			standing({ id: 'Waitman', totalPoints: 41, adjustedScore: 6.8 }),
-			standing({ id: 'Four', totalPoints: 41, adjustedScore: 5.9 })
+			standing({ id: 'Cameo', totalPoints: 11, adjustedScore: 11, gamesPlayed: 1 }),
+			standing({ id: 'AllNight', totalPoints: 66, adjustedScore: 11, gamesPlayed: 6 })
 		];
 
-		const ranked = rankStandings(standings);
+		expect(rankStandings(standings).map((s) => s.id)).toEqual(['AllNight', 'Cameo']);
+	});
 
-		expect(ranked.map((s) => s.id)).toEqual(['Waitman', 'Four']);
+	test('a handicap cannot buy a tiebreak over someone who played more', () => {
+		const standings = [
+			// 58-point handicap plus one 11-point win.
+			standing({ id: 'Late', totalPoints: 69, adjustedScore: 11, gamesPlayed: 1 }),
+			standing({ id: 'Regular', totalPoints: 66, adjustedScore: 11, gamesPlayed: 6 })
+		];
+
+		expect(rankStandings(standings).map((s) => s.id)).toEqual(['Regular', 'Late']);
+	});
+
+	test('falls through to total points when adjusted score and games played both tie', () => {
+		const standings = [
+			standing({ id: 'Four', totalPoints: 41, adjustedScore: 6.8, gamesPlayed: 6 }),
+			standing({ id: 'Waitman', totalPoints: 55, adjustedScore: 6.8, gamesPlayed: 6 })
+		];
+
+		expect(rankStandings(standings).map((s) => s.id)).toEqual(['Waitman', 'Four']);
+	});
+});
+
+describe('adjusted score and the mid-session handicap', () => {
+	test('the handicap counts toward total points but is left out of the average', () => {
+		const players = [player('late', 'Late', 58), player('reg', 'Reg')];
+		const rounds = [
+			round({
+				roundNumber: 1,
+				courts: [
+					{
+						court: 1,
+						teamA: ['late', 'x'],
+						teamB: ['reg', 'y'],
+						score: { teamAPoints: 11, teamBPoints: 9 }
+					}
+				]
+			})
+		];
+
+		const [late, reg] = computeStandings(players, rounds);
+
+		expect(late.totalPoints).toBe(69);
+		expect(late.adjustedScore).toBe(11);
+		expect(reg.adjustedScore).toBe(9);
+		// Without excluding the handicap this would be 69, handing a one-game newcomer the night.
+		expect(rankStandings([late, reg]).map((s) => s.id)).toEqual(['late', 'reg']);
 	});
 });
 

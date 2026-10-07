@@ -18,10 +18,8 @@
 					<tr>
 						<th>#</th>
 						<th>{tournamentStore.isTeamMode ? 'Team' : 'Player'}</th>
-						<th>Pts</th>
-						<th title="Points per game played - fair to compare across players who've sat out more">
-							Adj
-						</th>
+						<th title="Points per game played - this is what decides the standings">Adj</th>
+						<th title="Every point won tonight, including any starting handicap">Pts</th>
 						<th>Wins</th>
 						<th>Games</th>
 						<th title="Previous rounds sat out, excluding the round in progress">Sat out</th>
@@ -32,8 +30,8 @@
 						<tr>
 							<td>{i + 1}</td>
 							<td>{tournamentStore.displayName(s.id)}</td>
+							<td class="primary-score">{s.adjustedScore.toFixed(1)}</td>
 							<td>{s.totalPoints}</td>
-							<td>{s.adjustedScore.toFixed(1)}</td>
 							<td>{s.wins}</td>
 							<td>{s.gamesPlayed}</td>
 							<td>{s.timesSatOut}</td>
@@ -42,11 +40,18 @@
 				</tbody>
 			</table>
 		</div>
-		<p class="hint">Adj = points per game played, so sitting out more doesn't tank your rank.</p>
+		<p class="hint">
+			Adj = points won per game played, and decides the standings — so sitting out more doesn't
+			tank your rank. Pts is the running total.
+		</p>
 	{/if}
 </section>
 
 <style>
+	.primary-score {
+		font-weight: 600;
+		color: var(--text);
+	}
 	.leaderboard {
 		padding: 1.25rem;
 		display: flex;

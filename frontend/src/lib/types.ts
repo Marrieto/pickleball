@@ -8,7 +8,8 @@ export interface PlayerStanding {
 	roundsSincePlayed: number;
 	/** Total rounds sat out across the whole tournament so far (fairness indicator). */
 	timesSatOut: number;
-	/** Points per game played - lets players with fewer games (due to sitting out) be compared fairly. */
+	/** Points won on court per game played, excluding any starting handicap. This is what decides
+	 *  the standings - it lets players with fewer games (sat out, or arrived late) compare fairly. */
 	adjustedScore: number;
 	/** Manually sat out for the round being generated; still eligible in future rounds. */
 	benched: boolean;

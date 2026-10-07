@@ -86,7 +86,7 @@ function buildTeams(
 
 /** Mexicano: rank-sorted groups of 4, split into teams per the given style. */
 function pairByRank(players: PlayerStanding[], style: PairingStyle): CourtMatch[] {
-	const byStanding = [...players].sort((a, b) => b.totalPoints - a.totalPoints);
+	const byStanding = rankStandings(players);
 
 	const courts: CourtMatch[] = [];
 	for (let i = 0; i + 4 <= byStanding.length; i += 4) {

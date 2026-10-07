@@ -20,8 +20,9 @@ function accumulate(
 	sideOf: SideOf
 ): Standing[] {
 	return units.map((unit) => {
+		const handicap = unit.startingPoints ?? 0;
 		let gamesPlayed = 0;
-		let totalPoints = unit.startingPoints ?? 0;
+		let earnedPoints = 0;
 		let wins = 0;
 		let timesSatOut = 0;
 		let roundsSincePlayed = rounds.length;
@@ -37,7 +38,7 @@ function accumulate(
 				if (court.score) {
 					const ownPoints = side === 'A' ? court.score.teamAPoints : court.score.teamBPoints;
 					const otherPoints = side === 'A' ? court.score.teamBPoints : court.score.teamAPoints;
-					totalPoints += ownPoints;
+					earnedPoints += ownPoints;
 					if (ownPoints > otherPoints) wins++;
 				}
 			}
@@ -50,11 +51,13 @@ function accumulate(
 		return {
 			id: unit.id,
 			gamesPlayed,
-			totalPoints,
+			totalPoints: handicap + earnedPoints,
 			wins,
 			roundsSincePlayed,
 			timesSatOut,
-			adjustedScore: gamesPlayed > 0 ? totalPoints / gamesPlayed : 0,
+			// Only points won on court are averaged. The handicap exists to make a late joiner's
+			// TOTAL comparable, so folding it in here would hand them a huge average off one game.
+			adjustedScore: gamesPlayed > 0 ? earnedPoints / gamesPlayed : 0,
 			benched: false
 		};
 	});
@@ -70,10 +73,17 @@ export function computeTeamStandings(teams: Team[], rounds: Round[]): Standing[]
 	return accumulate(teams, rounds, teamSide);
 }
 
-/** Ranks by total points, breaking ties with the higher adjusted (per-game) score. */
+/** Ranks by adjusted (per-game) score - the figure that decides the night. Ties go to whoever
+ *  played more rounds, then to total points. Exact ties are common rather than freak events:
+ *  in firstTo scoring the winner always takes exactly the target, so a player who wins every
+ *  game lands on a round number. Games played is deliberately ahead of total points here, so a
+ *  late joiner's handicap can never buy them a tiebreak.
+ *  Used for the leaderboard, final-round seeding and rank-based matchmaking alike, so "who's
+ *  top" means one thing everywhere. */
 export function rankStandings(standings: Standing[]): Standing[] {
 	return [...standings].sort((a, b) => {
-		if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
-		return b.adjustedScore - a.adjustedScore;
+		if (b.adjustedScore !== a.adjustedScore) return b.adjustedScore - a.adjustedScore;
+		if (b.gamesPlayed !== a.gamesPlayed) return b.gamesPlayed - a.gamesPlayed;
+		return b.totalPoints - a.totalPoints;
 	});
 }
