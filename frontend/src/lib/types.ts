@@ -41,6 +41,8 @@ export interface RoundPlan {
 }
 
 export interface Player {
+	/** Set when the player came from a Zoezi import, so repeat imports skip them. */
+	zoezi?: { origin: string; memberId: number; workoutId: number };
 	id: string;
 	name: string;
 	active: boolean;

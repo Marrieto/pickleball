@@ -1,4 +1,5 @@
 import { PersistedState } from 'runed';
+import { applyImport, type ZoeziImport, type ImportChoice } from './zoezi/import';
 import {
 	addPlayer as addPlayerAction,
 	canGenerateRound as canGenerateRoundAction,
@@ -77,6 +78,11 @@ export class TournamentStore {
 	private get prefs(): DevicePreferences {
 		const p = this.preferences.current;
 		return { ...p, roster: p.roster ?? [], lastLineup: p.lastLineup ?? [] };
+	}
+
+	/** Everyone remembered on this device, whether or not they're in a tournament. */
+	get knownPlayers(): RosterEntry[] {
+		return this.prefs.roster;
 	}
 
 	/** Names remembered on this device that aren't in the current tournament - offered for one-tap re-adding. */
@@ -204,24 +210,42 @@ export class TournamentStore {
 		name: string,
 		courtCount: number,
 		targetScore: number,
-		settings?: Partial<TournamentSettings>
+		settings?: Partial<TournamentSettings>,
+		players?: Player[]
 	) {
-		const { roster, lastLineup } = this.prefs;
-		// Fall back to the whole roster the first time, before any lineup has been recorded.
-		const lineup = lastLineup.length > 0 ? lastLineup : roster.map((entry) => entry.id);
-		const byId = new Map(roster.map((entry) => [entry.id, entry]));
-
 		this.tournamentState.current = {
 			...createTournamentAction(name, courtCount, targetScore, { ...settings, darkMode: this.darkMode }),
 			courtLabels: Object.fromEntries(
 				Object.entries(this.prefs.courtLabels).map(([court, labels]) => [court, { ...labels }])
 			),
 			// Roster ids carry over as player ids, so a person keeps one identity across sessions.
-			players: lineup
-				.map((id) => byId.get(id))
-				.filter((entry) => entry !== undefined)
-				.map((entry) => ({ id: entry.id, name: entry.name, active: true, startingPoints: 0 }))
+			players: players ?? this.startingLineup
 		};
+		// A lineup handed in from outside (a setup link) isn't in this device's roster yet.
+		if (players) {
+			for (const player of players) this.rememberPlayer(player.id, player.name);
+			const prefs = this.prefs;
+			this.preferences.current = { ...prefs, lastLineup: players.map((player) => player.id) };
+		}
+	}
+
+	/** Who a new tournament starts with: the last session's lineup, or the whole saved roster the first time. */
+	get startingLineup(): Player[] {
+		const { roster, lastLineup } = this.prefs;
+		const lineup = lastLineup.length > 0 ? lastLineup : roster.map((entry) => entry.id);
+		const byId = new Map(roster.map((entry) => [entry.id, entry]));
+		return lineup
+			.map((id) => byId.get(id))
+			.filter((entry) => entry !== undefined)
+			.map((entry) => ({ id: entry.id, name: entry.name, active: true, startingPoints: 0 }));
+	}
+
+	importZoezi(data: ZoeziImport, choices: ImportChoice[], startingPoints = 0) {
+		if (!this.tournament || this.isFinalized) throw new Error('Import requires an unfinished tournament.');
+		this.tournamentState.current = applyImport(this.tournament, data, choices, startingPoints);
+		for (const player of this.tournament.players) {
+			if (player.zoezi && player.active) this.rememberPlayer(player.id, player.name);
+		}
 	}
 
 	endTournament() {

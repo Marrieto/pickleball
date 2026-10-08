@@ -1,0 +1,89 @@
+(async () => {
+  const origin = 'https://korpenkalmarpickleballklubb.zoezi.se';
+  if (location.origin !== origin) {
+    alert('Open ' + origin + ', log in, then click this bookmark again.');
+    return;
+  }
+  const existing = document.getElementById('dink-city-zoezi-helper');
+  if (existing) { existing.focus(); return; }
+  const host = document.createElement('dialog');
+  host.id = 'dink-city-zoezi-helper';
+  host.style.cssText = 'padding:0;border:0;border-radius:12px;max-width:94vw;width:520px;max-height:90vh;background:white;color:#172326;';
+  const container = document.createElement('div'); host.append(container);
+  const root = container.attachShadow({ mode: 'open' });
+  const style = document.createElement('style');
+  style.textContent = ':host{font:16px system-ui}section{padding:22px;display:grid;gap:14px}h2,p{margin:0}label{display:grid;gap:6px}input,select,textarea,button{font:inherit;padding:10px;box-sizing:border-box;max-width:100%}textarea{width:100%;height:140px}button{cursor:pointer}pre{white-space:pre-wrap;max-height:180px;overflow:auto;margin:0}';
+  root.append(style);
+  const section = document.createElement('section'); root.append(section);
+  function element(tag, text, parent = section) {
+    const node = document.createElement(tag); if (text) node.textContent = text; parent.append(node); return node;
+  }
+  element('h2', 'Import players into Dink City');
+  element('p', 'Choose a session, then copy its confirmed participants. Waiting-list entries are excluded.');
+  const close = element('button', 'Close'); close.onclick = () => host.remove();
+  const dateLabel = element('label', 'Session date');
+  const date = element('input', '', dateLabel); date.type = 'date';
+  date.value = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Stockholm', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+  const load = element('button', 'Find sessions');
+  const sessionLabel = element('label', 'Session');
+  const select = element('select', '', sessionLabel);
+  const preview = element('button', 'Preview participants'); preview.disabled = true;
+  const status = element('p', ''); status.setAttribute('role', 'status');
+  const names = element('pre', '');
+  const outputLabel = element('label', 'Import data (copy into Dink City → Players → Import from Zoezi)');
+  const output = element('textarea', '', outputLabel); output.readOnly = true;
+  const copy = element('button', 'Copy import data'); copy.disabled = true;
+  let sessions = [], revision = 0;
+  function clear() { output.value = ''; names.textContent = ''; copy.disabled = true; }
+  async function get(path) {
+    const response = await fetch(path, { credentials: 'same-origin', cache: 'no-store' });
+    if (response.status === 401 || response.status === 403) throw new Error('Log in to Zoezi with your member account, then try again. Your club must allow participant names to be shown.');
+    if (!response.ok) throw new Error('Zoezi returned HTTP ' + response.status + '. Try again.');
+    return response.json();
+  }
+  async function find() {
+    const current = ++revision; clear(); select.replaceChildren(); preview.disabled = true;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date.value)) { status.textContent = 'Choose a date.'; return; }
+    status.textContent = 'Loading sessions…';
+    try {
+      const data = await get('/api/public/workout/get/all?fromDate=' + date.value + '&toDate=' + date.value);
+      if (current !== revision || !host.isConnected) return;
+      if (!Array.isArray(data.workouts)) throw new Error('Unexpected session response from Zoezi.');
+      sessions = data.workouts.filter(w => /pickleball/i.test(w.workoutType?.name || '') && w.status === 'Ok');
+      sessions.sort((a, b) => a.startTime.localeCompare(b.startTime));
+      for (const w of sessions) {
+        const title = [w.workoutType.name, w.extra_title, ...(w.courses || []).map(c => c.name)].filter(Boolean).join(' — ');
+        w.importTitle = title;
+        const option = element('option', w.startTime.slice(11, 16) + ' — ' + title, select); option.value = String(w.id);
+      }
+      preview.disabled = !sessions.length;
+      status.textContent = sessions.length ? 'Select the session you want, then preview its players.' : 'No pickleball sessions on this date. Choose another date.';
+    } catch (error) { if (current === revision) status.textContent = error.message || 'Could not load sessions.'; }
+  }
+  date.onchange = find; load.onclick = find;
+  select.onchange = () => { revision++; clear(); status.textContent = 'Preview the selected session.'; };
+  preview.onclick = async () => {
+    const current = ++revision; clear();
+    const workout = sessions.find(w => String(w.id) === select.value); if (!workout) return;
+    status.textContent = 'Loading participants…';
+    try {
+      const rows = await get('/api/memberapi/workout/bookings/get?id=' + encodeURIComponent(workout.id));
+      if (current !== revision || !host.isConnected) return;
+      if (!Array.isArray(rows)) throw new Error('Unexpected participant response. Log in and try again.');
+      const confirmed = rows.filter(p => p.booking === true && p.inQueue === false);
+      if (confirmed.some(p => !Number.isSafeInteger(p.id) || p.id <= 0 || typeof p.name !== 'string' || !p.name.trim())) throw new Error('Zoezi returned incomplete participant details.');
+      const participants = confirmed.map(p => ({ id: p.id, name: p.name.trim() }));
+      status.textContent = participants.length + ' confirmed participants; ' + rows.filter(p => p.inQueue).length + ' waiting-list entries excluded.';
+      names.textContent = participants.map(p => p.name).join('\n');
+      if (!participants.length) return;
+      output.value = JSON.stringify({ version: 1, origin, workout: { id: workout.id, title: workout.importTitle, startTime: workout.startTime }, participants });
+      copy.disabled = false;
+    } catch (error) { if (current === revision) status.textContent = error.message || 'Could not load participants.'; }
+  };
+  copy.onclick = async () => {
+    try { await navigator.clipboard.writeText(output.value); status.textContent = 'Copied. In Dink City, open Players → Import from Zoezi and paste.'; }
+    catch { output.focus(); output.select(); status.textContent = 'Copy the selected text manually, then paste it into Dink City.'; }
+  };
+  host.addEventListener('cancel', () => host.remove());
+  document.body.append(host); host.showModal(); await find();
+})();

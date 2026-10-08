@@ -283,7 +283,7 @@
 						maxScore={tournament.targetScore}
 						scoringMode={tournament.settings.scoringMode}
 						{playerName}
-						sideLabels={tournament.courtLabels[match.court] ?? {}}
+						sideLabels={tournament.courtLabels?.[match.court] ?? {}}
 					/>
 				{/if}
 				</div>

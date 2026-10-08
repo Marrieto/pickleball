@@ -53,7 +53,7 @@ export function setCourtLabel(
 	label: string
 ): Tournament {
 	const trimmed = label.trim();
-	const existing = tournament.courtLabels[court] ?? {};
+	const existing = tournament.courtLabels?.[court] ?? {};
 	const updated = { ...existing, [side]: trimmed || undefined };
 
 	return {

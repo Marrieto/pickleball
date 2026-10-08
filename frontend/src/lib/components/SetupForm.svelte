@@ -2,20 +2,68 @@
 	import { base } from '$app/paths';
 	import { tournamentStore } from '$lib/tournament-store.svelte';
 	import ThemeToggle from './ThemeToggle.svelte';
-	import type { EntryMode, PairingFormat, PairingStyle, ScoringMode } from '$lib/types';
+	import ZoeziImport from './ZoeziImport.svelte';
+	import { onMount, type ComponentProps } from 'svelte';
+	import { makeId } from '$lib/id';
+	import { SCORE_DEFAULTS, SETUP_DEFAULTS, buildSetupLink, parseSetupLink } from '$lib/setup-link';
+	import type { EntryMode, PairingFormat, PairingStyle, Player, ScoringMode } from '$lib/types';
 
-	const SCORE_DEFAULTS: Record<ScoringMode, { default: number; min: number; max: number }> = {
-		firstTo: { default: 11, min: 2, max: 15 },
-		bestOf: { default: 21, min: 4, max: 40 }
-	};
+	let name = $state(SETUP_DEFAULTS.name);
+	let courtCount = $state(SETUP_DEFAULTS.courtCount);
+	let entryMode = $state<EntryMode>(SETUP_DEFAULTS.entryMode);
+	let pairingFormat = $state<PairingFormat>(SETUP_DEFAULTS.pairingFormat);
+	let pairingStyle = $state<PairingStyle>(SETUP_DEFAULTS.pairingStyle);
+	let scoringMode = $state<ScoringMode>(SETUP_DEFAULTS.scoringMode);
+	let targetScore = $state(SETUP_DEFAULTS.targetScore);
+	/** Players that arrived in a setup link; they replace the lineup remembered on this device. */
+	let linkPlayers = $state<Player[] | null>(null);
+	let lineup = $derived(linkPlayers ?? tournamentStore.startingLineup);
+	let linkCopied = $state(false);
+	let linkText = $state('');
 
-	let name = $state('Pickleball Night');
-	let courtCount = $state(2);
-	let entryMode = $state<EntryMode>('individual');
-	let pairingFormat = $state<PairingFormat>('mexicano');
-	let pairingStyle = $state<PairingStyle>('standard');
-	let scoringMode = $state<ScoringMode>('firstTo');
-	let targetScore = $state(SCORE_DEFAULTS.firstTo.default);
+	onMount(() => {
+		const { config, players } = parseSetupLink(window.location.search);
+		if (window.location.search) history.replaceState(history.state, '', window.location.pathname);
+		name = config.name ?? name;
+		courtCount = config.courtCount ?? courtCount;
+		scoringMode = config.scoringMode ?? scoringMode;
+		targetScore = config.targetScore ?? targetScore;
+		entryMode = config.entryMode ?? entryMode;
+		pairingFormat = config.pairingFormat ?? pairingFormat;
+		pairingStyle = config.pairingStyle ?? pairingStyle;
+		if (players.length) {
+			// Reuse a remembered person's id so their identity carries over between sessions.
+			const known = new Map(tournamentStore.knownPlayers.map((p) => [p.name.toLocaleLowerCase('sv'), p.id]));
+			linkPlayers = players.map((playerName) => ({
+				id: known.get(playerName.toLocaleLowerCase('sv')) ?? makeId(),
+				name: playerName,
+				active: true,
+				startingPoints: 0
+			}));
+		}
+	});
+
+	async function copyLink() {
+		const names = [
+			...lineup.map((player) => player.name),
+			...(zoeziImport?.choices
+				.filter((choice) => choice.action === 'add')
+				.map((choice) => zoeziImport!.data.participants.find((p) => p.id === choice.memberId)?.name ?? '') ?? [])
+		];
+		linkText = buildSetupLink(
+			window.location.href,
+			{ name, courtCount, targetScore, scoringMode, entryMode, pairingFormat, pairingStyle },
+			names
+		);
+		try {
+			await navigator.clipboard.writeText(linkText);
+			linkCopied = true;
+			setTimeout(() => (linkCopied = false), 2000);
+		} catch {
+			// Clipboard needs a secure context; the text box below lets them copy by hand.
+		}
+	}
+	let zoeziImport = $state<ComponentProps<typeof ZoeziImport>['staged']>(null);
 
 	function onScoringModeChange(mode: ScoringMode) {
 		scoringMode = mode;
@@ -29,7 +77,8 @@
 			pairingFormat,
 			pairingStyle,
 			scoringMode
-		});
+		}, linkPlayers ?? undefined);
+		if (zoeziImport) tournamentStore.importZoezi(zoeziImport.data, zoeziImport.choices);
 	}
 </script>
 
@@ -137,6 +186,26 @@
 		</label>
 	</div>
 
+	{#if linkPlayers}
+		<div class="link-players">
+			<strong>Players from link ({linkPlayers.length})</strong>
+			<p>{linkPlayers.map((player) => player.name).join(', ')}</p>
+			<button type="button" class="link" onclick={() => (linkPlayers = null)}>Clear</button>
+		</div>
+	{/if}
+
+	<ZoeziImport players={lineup} bind:staged={zoeziImport} />
+
+	<div class="share">
+		<button type="button" class="secondary" onclick={copyLink}>
+			{linkCopied ? 'Link copied ✓' : 'Copy setup link'}
+		</button>
+		{#if linkText}
+			<input readonly value={linkText} aria-label="Setup link" onfocus={(e) => e.currentTarget.select()} />
+		{/if}
+		<p class="hint">Opens this setup, players included, on any device.</p>
+	</div>
+
 	<button type="submit" class="primary">Start tournament</button>
 </form>
 
@@ -222,5 +291,52 @@
 		color: var(--primary-contrast);
 		font-weight: 600;
 		font-size: 1rem;
+	}
+	.link-players {
+		display: grid;
+		gap: 0.3rem;
+		padding: 0.75rem;
+		border: 1px solid var(--border);
+		border-radius: 10px;
+		font-size: 0.875rem;
+	}
+	.link-players p {
+		margin: 0;
+		overflow-wrap: anywhere;
+		color: var(--text-muted);
+	}
+	button.link {
+		justify-self: start;
+		padding: 0;
+		border: none;
+		background: none;
+		color: var(--primary);
+		text-decoration: underline;
+	}
+	.share {
+		display: grid;
+		gap: 0.5rem;
+	}
+	.share .hint {
+		margin: 0;
+		font-size: 0.75rem;
+		color: var(--text-muted);
+	}
+	.share input {
+		min-width: 0;
+		padding: 0.5rem 0.65rem;
+		border-radius: 8px;
+		border: 1px solid var(--border);
+		background: var(--bg);
+		color: var(--text);
+		font-size: 0.75rem;
+	}
+	button.secondary {
+		padding: 0.65rem;
+		border-radius: 10px;
+		border: 1px solid var(--border);
+		background: var(--surface);
+		color: var(--text);
+		font-weight: 600;
 	}
 </style>
