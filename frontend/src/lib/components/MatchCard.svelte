@@ -172,6 +172,11 @@
 		font-size: clamp(1.125rem, 1.5vw, 1.75rem);
 	}
 	.team { min-height: 4.5rem; }
+	@media (max-width: 600px) {
+		.match { padding: 0.75rem; }
+		.team { min-height: 3.75rem; }
+		.players { text-wrap: balance; }
+	}
 	.side-label {
 		max-width: 100%;
 		overflow-wrap: anywhere;

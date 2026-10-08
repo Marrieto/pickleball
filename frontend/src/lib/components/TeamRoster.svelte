@@ -36,9 +36,7 @@
 	}
 </script>
 
-<section class="card roster">
-	<h2>Teams ({teams.length})</h2>
-
+<section class="roster">
 	{#if !validation.ok && !tournamentStore.isFinalized}
 		<p class="warning">
 			{#if unassigned.length > 0}
@@ -105,13 +103,9 @@
 
 <style>
 	.roster {
-		padding: 1.25rem;
 		display: flex;
 		flex-direction: column;
 		gap: 1rem;
-	}
-	h2 {
-		font-size: 1rem;
 	}
 	.warning {
 		margin: 0;
@@ -149,12 +143,13 @@
 	}
 	.name {
 		min-width: 0;
-		overflow-wrap: anywhere;
+		overflow-wrap: break-word;
 		font-weight: 500;
 		flex: 1;
 	}
 	.bench {
 		display: flex;
+		cursor: pointer;
 		align-items: center;
 		gap: 0.35rem;
 		font-size: 0.75rem;
@@ -204,5 +199,16 @@
 		background: var(--primary);
 		color: var(--primary-contrast);
 		font-weight: 600;
+	}
+	@media (max-width: 600px) {
+		/* Name + remove on the first line, bench toggle below, so names never break mid-word. */
+		ul:not(.chips) > li:not(.empty) {
+			display: grid;
+			grid-template-columns: minmax(0, 1fr) auto;
+			row-gap: 0.15rem;
+		}
+		ul:not(.chips) > li .bench { grid-column: 1 / -1; grid-row: 2; }
+		.remove { padding: 0.5rem 0.65rem; margin: -0.25rem -0.3rem -0.25rem 0; }
+		.bench { padding: 0.25rem 0; font-size: 0.8rem; }
 	}
 </style>

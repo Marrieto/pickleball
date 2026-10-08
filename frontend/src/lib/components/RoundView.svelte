@@ -399,6 +399,13 @@
 		flex: 0 1 100%;
 		min-width: 0;
 	}
+	@media (max-width: 600px) {
+		.round-header { gap: 0.5rem; }
+		.round-header h2 { min-width: 5rem; }
+		.edit-toggle { padding: 0.35rem 0.7rem; }
+		.round-actions { flex-direction: column; align-items: stretch; gap: 0.5rem; }
+		.round-actions button { width: 100%; min-height: 2.75rem; }
+	}
 	@media (min-width: 700px) {
 		.court-slot { flex-basis: calc((100% - 0.75rem) / 2); }
 	}

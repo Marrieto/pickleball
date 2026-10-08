@@ -18,4 +18,9 @@
 		font-size: 0.875rem;
 		flex-shrink: 0;
 	}
+	@media (max-width: 600px) {
+		button {
+			padding: 0.4rem 0.6rem;
+		}
+	}
 </style>

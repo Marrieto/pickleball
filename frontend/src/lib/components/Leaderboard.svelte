@@ -4,8 +4,7 @@
 	let standings = $derived(tournamentStore.standings);
 </script>
 
-<section class="card leaderboard">
-	<h2>Leaderboard</h2>
+<section class="leaderboard">
 	{#if tournamentStore.isFinalized}
 		<p class="hint">Standings used to seed the final round. Final games do not change these scores.</p>
 	{/if}
@@ -53,13 +52,9 @@
 		color: var(--text);
 	}
 	.leaderboard {
-		padding: 1.25rem;
 		display: flex;
 		flex-direction: column;
 		gap: 0.75rem;
-	}
-	h2 {
-		font-size: 1rem;
 	}
 	.hint {
 		margin: 0;
@@ -88,9 +83,28 @@
 		letter-spacing: 0.03em;
 	}
 	tbody tr:nth-child(odd) {
-		background: var(--bg);
+		background: var(--surface);
 	}
 	tbody tr:first-child {
 		font-weight: 700;
+	}
+	/* Keep the name visible while the stat columns scroll sideways on phones. */
+	td:nth-child(2),
+	th:nth-child(2) {
+		position: sticky;
+		left: 0;
+		background: var(--bg);
+	}
+	tbody tr:nth-child(odd) td:nth-child(2) {
+		background: var(--surface);
+	}
+	@media (max-width: 600px) {
+		th,
+		td {
+			padding: 0.4rem 0.35rem;
+		}
+		table {
+			font-size: 0.8rem;
+		}
 	}
 </style>

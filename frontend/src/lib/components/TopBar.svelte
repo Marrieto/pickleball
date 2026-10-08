@@ -27,15 +27,20 @@
 <header class="topbar">
 	<div class="title">
 		<img class="logo" src={icon} alt="" />
-		<div>
+		<div class="text">
 			<h1>{tournament.name}</h1>
 			<span class="meta">{tournament.courtCount} courts · {scoreLabel} · {formatLabel}</span>
 		</div>
 	</div>
 	<div class="actions">
 		{#if tournament.lastAction}
-			<button class="ghost" onclick={() => tournamentStore.undo()} title="Undo last action">
-				↶ Undo
+			<button
+				class="ghost"
+				onclick={() => tournamentStore.undo()}
+				title="Undo last action"
+				aria-label="Undo last action"
+			>
+				↶<span class="undo-label"> Undo</span>
 			</button>
 		{/if}
 		<ThemeToggle />
@@ -46,11 +51,12 @@
 <style>
 	.topbar {
 		display: flex;
-		flex-wrap: wrap;
 		align-items: center;
 		justify-content: space-between;
-		gap: 1rem;
-		padding: 1rem 1.25rem;
+		gap: 0.75rem;
+		padding: 0.75rem max(1.25rem, env(safe-area-inset-right)) 0.75rem
+			max(1.25rem, env(safe-area-inset-left));
+		padding-top: calc(0.75rem + env(safe-area-inset-top));
 		background: var(--header-bg);
 		position: sticky;
 		top: 0;
@@ -58,7 +64,7 @@
 	}
 	.title {
 		min-width: 0;
-		flex: 1 1 14rem;
+		flex: 1 1 auto;
 		display: flex;
 		align-items: center;
 		gap: 0.75rem;
@@ -69,19 +75,24 @@
 		border-radius: 8px;
 		flex-shrink: 0;
 	}
-	.title > div { min-width: 0; }
+	.text { min-width: 0; }
 	h1 {
-		overflow-wrap: anywhere;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 		font-size: 1.15rem;
 		color: var(--header-text);
 	}
 	.meta {
 		display: block;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 		font-size: 0.8rem;
 		color: var(--header-text-muted);
 	}
 	.actions {
-		flex-wrap: wrap;
+		flex-shrink: 0;
 		display: flex;
 		gap: 0.5rem;
 		color: var(--header-text);
@@ -97,5 +108,20 @@
 	button.ghost.danger {
 		color: var(--danger);
 		border-color: var(--danger);
+	}
+	@media (max-width: 600px) {
+		.topbar {
+			gap: 0.5rem;
+			padding: 0.5rem max(0.75rem, env(safe-area-inset-right)) 0.5rem
+				max(0.75rem, env(safe-area-inset-left));
+			padding-top: calc(0.5rem + env(safe-area-inset-top));
+		}
+		.title { gap: 0.5rem; }
+		.logo { width: 1.75rem; height: 1.75rem; }
+		h1 { font-size: 1rem; }
+		.meta { font-size: 0.7rem; }
+		.actions { gap: 0.35rem; }
+		button.ghost { padding: 0.4rem 0.6rem; }
+		.undo-label { display: none; }
 	}
 </style>

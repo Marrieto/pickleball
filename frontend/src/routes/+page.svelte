@@ -7,7 +7,13 @@
 	import RoundView from '$lib/components/RoundView.svelte';
 	import Leaderboard from '$lib/components/Leaderboard.svelte';
 	let panel = $state<'leaderboard' | 'players' | 'teams'>('leaderboard');
-	const PANEL_TITLES = { leaderboard: 'Leaderboard', players: 'Players', teams: 'Teams' };
+	let panelTitle = $derived.by(() => {
+		if (panel === 'players') {
+			return `Players · ${tournamentStore.tournament?.players.filter((p) => p.active).length ?? 0}`;
+		}
+		if (panel === 'teams') return `Teams · ${tournamentStore.teams.length}`;
+		return 'Leaderboard';
+	});
 	let modal = $state<HTMLDialogElement>();
 	function openPanel(next: typeof panel) {
 		panel = next;
@@ -41,10 +47,12 @@
 			<RoundView />
 		</div>
 	</main>
-	<dialog bind:this={modal} onclick={closeOnBackdrop} aria-label={PANEL_TITLES[panel]}>
+	<dialog bind:this={modal} onclick={closeOnBackdrop} aria-label={panelTitle}>
 		<div class="modal-header">
-			<strong>{PANEL_TITLES[panel]}</strong>
-			<button onclick={() => modal?.close()} aria-label="Close panel">Close ✕</button>
+			<strong>{panelTitle}</strong>
+			<button onclick={() => modal?.close()} aria-label="Close panel">
+					<span class="close-label">Close </span>✕
+				</button>
 		</div>
 		{#if panel === 'leaderboard'}
 			<Leaderboard />
@@ -66,6 +74,16 @@
 	}
 	@media (max-width: 1099px) {
 		main { padding: 0.75rem; }
+	}
+	@media (max-width: 600px) {
+		main { padding: 0.5rem; }
+		.column { gap: 0.75rem; }
+		.panel-tools { flex-wrap: nowrap; gap: 0.5rem; }
+		.panel-tools button { flex: 1 1 0; min-width: 0; padding: 0.55rem 0.5rem; }
+		dialog { width: calc(100% - 1rem); padding: 0.75rem; }
+		.modal-header { margin-bottom: 0.75rem; }
+		.modal-header button { padding: 0.45rem 0.7rem; }
+		.close-label { display: none; }
 	}
 	.column {
 		min-width: 0;
