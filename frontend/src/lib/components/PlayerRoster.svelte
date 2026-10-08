@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { tournamentStore } from '$lib/tournament-store.svelte';
+	import { buildSetupLink } from '$lib/setup-link';
 
 	let tournament = $derived(tournamentStore.tournament!);
 	let activePlayers = $derived(tournament.players.filter((p) => p.active));
@@ -35,6 +36,38 @@
 
 	function cancelAdd() {
 		pendingName = null;
+	}
+
+	let copied = $state(false);
+	let failed = $state(false);
+
+	/** Puts this tournament's setup and active players into the address bar, then copies it. */
+	async function copyLink() {
+		const { settings } = tournament;
+		const link = buildSetupLink(
+			window.location.href,
+			{
+				name: tournament.name,
+				courtCount: tournament.courtCount,
+				targetScore: tournament.targetScore,
+				scoringMode: settings.scoringMode,
+				entryMode: settings.entryMode,
+				pairingFormat: settings.pairingFormat,
+				pairingStyle: settings.pairingStyle
+			},
+			activePlayers.map((p) => p.name)
+		);
+		history.replaceState(history.state, '', link);
+		try {
+			await navigator.clipboard.writeText(link);
+			copied = true;
+			failed = false;
+		} catch {
+			// Clipboard needs a secure context; the address bar now holds the link to copy by hand.
+			failed = true;
+			copied = false;
+		}
+		setTimeout(() => (copied = failed = false), 2500);
 	}
 
 	function readd(id: string, name: string) {
@@ -122,6 +155,15 @@
 			</ul>
 		</div>
 	{/if}
+
+	<button
+		class="copy-link"
+		type="button"
+		onclick={copyLink}
+		title="Copy a link that recreates this setup and these players"
+	>
+		{copied ? 'Link copied ✓' : failed ? 'Copy from address bar' : '🔗 Copy setup link'}
+	</button>
 </section>
 
 <style>
@@ -263,6 +305,17 @@
 	}
 	.remove:hover {
 		color: var(--danger);
+	}
+	.copy-link {
+		align-self: center;
+		border: none;
+		background: none;
+		padding: 0.25rem 0.5rem;
+		font-size: 0.75rem;
+		color: var(--text-muted);
+	}
+	.copy-link:hover {
+		color: var(--text);
 	}
 	.previous {
 		display: flex;
