@@ -22,6 +22,7 @@
 	let lineup = $derived(linkPlayers ?? tournamentStore.startingLineup);
 	let added = $state<Player[]>([]);
 	let removed = $state<string[]>([]);
+	let zoeziImport = $state<ComponentProps<typeof ZoeziImport>['staged']>(null);
 	let newName = $state('');
 	let selected = $state('');
 	let pairs = $state<[string, string][]>([]);
@@ -79,8 +80,6 @@
 			// Clipboard needs a secure context; the text box below lets them copy by hand.
 		}
 	}
-	let zoeziImport = $state<ComponentProps<typeof ZoeziImport>['staged']>(null);
-
 	function onScoringModeChange(mode: ScoringMode) {
 		scoringMode = mode;
 		targetScore = SCORE_DEFAULTS[mode].default;

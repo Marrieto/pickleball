@@ -2,7 +2,8 @@
 
 100% vibe coded. Run Americano or Mexicano nights with court matchups, scores, and a leaderboard.
 
-Everything stays in your local browser. No accounts, database, or syncing between devices.
+Tournaments stay in your local browser, without a database or syncing between devices.
+Self-hosted installations can optionally connect each user's own Zoezi account to import participants.
 
 Host free on GitHub Pages: select **Settings → Pages → Source → GitHub Actions**. Pushes to `main` deploy automatically.
 
@@ -16,6 +17,19 @@ docker run --rm -p 8080:8080 pickleball
 Open http://localhost:8080.
 
 ### Import players from Zoezi
+
+On Pinix, open **Import players from Zoezi**, log in with your own club Zoezi email
+or username and password, choose a date and session, and preview the participants.
+Review the list and press **Add players**, then **Start tournament** when ready.
+
+Each browser has a separate connection. Passwords are never saved or logged. Zoezi
+cookies stay in the server's memory; the browser receives only an opaque Pickleball
+session cookie. Connections expire after twelve hours, on logout, or when the server
+restarts. Accounts must be allowed to see participant names. This uses Zoezi's web
+login flow, rather than the API-key integration, and may need updating if Zoezi changes it.
+
+The original manual import remains available under **Import manually with the Zoezi
+helper**, and is the import method used on GitHub Pages:
 
 On the start screen, open **Import players from Zoezi** (it isn't shown during a game).
 Drag **Zoezi → Dink City** to your browser's bookmarks bar (manual installation
@@ -32,6 +46,40 @@ on Zoezi; the copied data contains session details and participant names/member 
 This currently supports `korpenkalmarpickleballklubb.zoezi.se` and requires the club
 to allow members to view participant names. Use the website in a browser that can
 run bookmarklets. If automatic copying fails, copy the selected export text manually.
+
+### Self-hosting the Zoezi connection
+
+The Nix flake builds for `aarch64-linux` and `x86_64-linux` and exports
+`nixosModules.default`. Pinix imports that module and supplies its public HTTPS origin:
+
+```nix
+services.pickleball = {
+  enable = true;
+  port = 29393;
+  zoezi.enable = true;
+  zoezi.publicOrigin = "https://pickleball.marrieto.duckdns.org";
+};
+```
+
+The service listens on localhost, behind an HTTPS reverse proxy. Direct import is
+disabled by default in standalone binaries and Docker. To enable it, set
+`ZOEZI_ENABLED=true` and `ZOEZI_PUBLIC_ORIGIN` to the exact public HTTPS origin
+without a trailing slash. `HOST` and `PORT` control the listener. HTTPS is required
+for the secure session cookie. For frontend development, build the frontend and
+run the Rust server behind a local HTTPS proxy with a matching origin.
+
+No account secrets, database, or writable state directory are required. API responses
+are marked `no-store` and excluded from the offline cache. Login permits five attempts
+per minute per client IP; forwarded addresses are accepted only from a local proxy.
+Do not enable request-body or cookie logging in the reverse proxy or add credentials
+to URLs or environment variables. Importing never changes an existing tournament.
+
+Before using a new installation, verify on a phone that login, date selection,
+participant preview and import work with a real member account. Repeat with a second
+browser and a different Zoezi account, then verify logout and server restart require
+login again. Real credentials must be entered only in the HTTPS app, never in shell
+commands, test fixtures or logs. Moving from GitHub Pages to Pinix uses different
+browser storage; existing tournaments are not migrated automatically.
 
 ### Setup links (prep on your phone, open on a TV)
 

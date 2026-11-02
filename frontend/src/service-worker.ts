@@ -29,6 +29,8 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
 	if (event.request.method !== 'GET') return;
+	const url = new URL(event.request.url);
+	if (url.origin !== self.location.origin || /(?:^|\/)api(?:\/|$)/.test(url.pathname)) return;
 
 	async function respond(): Promise<Response> {
 		const url = new URL(event.request.url);
@@ -41,7 +43,7 @@ self.addEventListener('fetch', (event) => {
 
 		try {
 			const response = await fetch(event.request);
-			if (response.status === 200) {
+			if (response.status === 200 && !response.headers.get('cache-control')?.includes('no-store')) {
 				cache.put(event.request, response.clone());
 			}
 			return response;

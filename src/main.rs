@@ -7,6 +7,8 @@ use axum::{
 };
 use rust_embed::RustEmbed;
 
+mod zoezi;
+
 #[derive(RustEmbed)]
 #[folder = "frontend/build"]
 struct Assets;
@@ -63,14 +65,32 @@ async fn shutdown_signal() {
 
 #[tokio::main]
 async fn main() {
-    let app = Router::new().fallback(get(handler));
+    let origin = if std::env::var("ZOEZI_ENABLED").as_deref() == Ok("true") {
+        let origin = std::env::var("ZOEZI_PUBLIC_ORIGIN")
+            .expect("ZOEZI_PUBLIC_ORIGIN is required when Zoezi is enabled");
+        let url = reqwest::Url::parse(&origin).expect("Invalid ZOEZI_PUBLIC_ORIGIN");
+        assert!(
+            url.scheme() == "https" && url.origin().ascii_serialization() == origin,
+            "ZOEZI_PUBLIC_ORIGIN must be an HTTPS origin without a trailing slash"
+        );
+        Some(origin)
+    } else {
+        None
+    };
+    let app = Router::new()
+        .nest("/api/zoezi", zoezi::router(origin))
+        .fallback(get(handler));
 
     let port = std::env::var("PORT").unwrap_or_else(|_| "8080".to_string());
-    let addr = format!("0.0.0.0:{port}");
+    let host = std::env::var("HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
+    let addr = format!("{host}:{port}");
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
     println!("Americano listening on http://{addr}");
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal())
-        .await
-        .unwrap();
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown_signal())
+    .await
+    .unwrap();
 }

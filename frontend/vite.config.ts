@@ -3,7 +3,8 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vitest/config';
 import { loadEnv } from 'vite';
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
+	resolve: mode === 'test' ? { conditions: ['browser'] } : undefined,
 	plugins: [
 		sveltekit({
 			compilerOptions: {
@@ -22,4 +23,4 @@ export default defineConfig({
 		environment: 'jsdom',
 		include: ['src/**/*.{test,spec}.{js,ts}']
 	}
-});
+}));
