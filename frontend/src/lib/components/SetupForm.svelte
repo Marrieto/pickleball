@@ -4,13 +4,15 @@
 	import ThemeToggle from './ThemeToggle.svelte';
 	import ZoeziImport from './ZoeziImport.svelte';
 	import { onMount, type ComponentProps } from 'svelte';
+	import { applyImport } from '$lib/zoezi/import';
+	import { createTournament } from '$lib/tournament-actions';
 	import { makeId } from '$lib/id';
 	import { SCORE_DEFAULTS, SETUP_DEFAULTS, buildSetupLink, parseSetupLink } from '$lib/setup-link';
-	import type { EntryMode, PairingFormat, PairingStyle, Player, ScoringMode } from '$lib/types';
+	import type { PairingFormat, PairingStyle, Player, ScoringMode } from '$lib/types';
 
 	let name = $state(SETUP_DEFAULTS.name);
 	let courtCount = $state(SETUP_DEFAULTS.courtCount);
-	let entryMode = $state<EntryMode>(SETUP_DEFAULTS.entryMode);
+
 	let pairingFormat = $state<PairingFormat>(SETUP_DEFAULTS.pairingFormat);
 	let pairingStyle = $state<PairingStyle>(SETUP_DEFAULTS.pairingStyle);
 	let scoringMode = $state<ScoringMode>(SETUP_DEFAULTS.scoringMode);
@@ -18,17 +20,35 @@
 	/** Players that arrived in a setup link; they replace the lineup remembered on this device. */
 	let linkPlayers = $state<Player[] | null>(null);
 	let lineup = $derived(linkPlayers ?? tournamentStore.startingLineup);
+	let added = $state<Player[]>([]);
+	let removed = $state<string[]>([]);
+	let newName = $state('');
+	let selected = $state('');
+	let pairs = $state<[string, string][]>([]);
+	let basePlayers = $derived([...lineup, ...added].filter(p => !removed.includes(p.id)));
+	let players = $derived(zoeziImport ? applyImport({ ...createTournament('', 1, 11), players: basePlayers }, zoeziImport.data, zoeziImport.choices, 0).players : basePlayers);
+	let validPairs = $derived(pairs.filter(pair => pair.every(id => players.some(p => p.id === id))));
+	function pick(id: string) {
+		if (selected === id) selected = '';
+		else if (selected && players.some(p => p.id === selected)) { pairs = [...validPairs, [selected, id]]; selected = ''; }
+		else selected = id;
+	}
+	function add() {
+		if (!newName.trim()) return;
+		added = [...added, { id: makeId(), name: newName.trim(), active: true, startingPoints: 0 }];
+		newName = '';
+	}
 	let linkCopied = $state(false);
 	let linkText = $state('');
 
 	onMount(() => {
-		const { config, players } = parseSetupLink(window.location.search);
+		const { config, players, pairs: linkedPairs } = parseSetupLink(window.location.search);
 		if (window.location.search) history.replaceState(history.state, '', window.location.pathname);
 		name = config.name ?? name;
 		courtCount = config.courtCount ?? courtCount;
 		scoringMode = config.scoringMode ?? scoringMode;
 		targetScore = config.targetScore ?? targetScore;
-		entryMode = config.entryMode ?? entryMode;
+
 		pairingFormat = config.pairingFormat ?? pairingFormat;
 		pairingStyle = config.pairingStyle ?? pairingStyle;
 		if (players.length) {
@@ -40,20 +60,16 @@
 				active: true,
 				startingPoints: 0
 			}));
+			pairs = linkedPairs.map(pair => pair.map(name => linkPlayers!.find(p => p.name === name)!.id) as [string, string]);
 		}
 	});
 
 	async function copyLink() {
-		const names = [
-			...lineup.map((player) => player.name),
-			...(zoeziImport?.choices
-				.filter((choice) => choice.action === 'add')
-				.map((choice) => zoeziImport!.data.participants.find((p) => p.id === choice.memberId)?.name ?? '') ?? [])
-		];
+		const names = players.map(p => p.name);
 		linkText = buildSetupLink(
 			window.location.href,
-			{ name, courtCount, targetScore, scoringMode, entryMode, pairingFormat, pairingStyle },
-			names
+			{ name, courtCount, targetScore, scoringMode, entryMode: 'individual', pairingFormat, pairingStyle },
+			names, validPairs.map(pair => pair.map(id => players.find(p => p.id === id)!.name) as [string, string])
 		);
 		try {
 			await navigator.clipboard.writeText(linkText);
@@ -72,13 +88,15 @@
 
 	function submit(e: SubmitEvent) {
 		e.preventDefault();
+		const startingPlayers = players;
+		const startingPairs = validPairs;
 		tournamentStore.startTournament(name.trim() || 'Tournament', courtCount, targetScore, {
-			entryMode,
+			entryMode: 'individual',
 			pairingFormat,
 			pairingStyle,
 			scoringMode
-		}, linkPlayers ?? undefined);
-		if (zoeziImport) tournamentStore.importZoezi(zoeziImport.data, zoeziImport.choices);
+		}, startingPlayers);
+		for (const [a, b] of startingPairs) tournamentStore.createTeam(a, b);
 	}
 </script>
 
@@ -94,17 +112,7 @@
 		<h1>Dink City</h1>
 		<ThemeToggle />
 	</div>
-	<p class="hint">
-		{#if entryMode === 'teams'}
-			{pairingFormat === 'americano'
-				? 'Fixed pairs — each team meets every other team once before any rematch.'
-				: 'Fixed pairs — teams are matched by standing, so the leaders meet on court 1.'}
-		{:else}
-			{pairingFormat === 'americano'
-				? 'Americano format — partners rotate each round so everyone eventually partners with everyone.'
-				: 'Mexicano format — rounds are paired dynamically from current standings.'}
-		{/if}
-	</p>
+	<p class="hint">Choose a format and optionally keep selected partners together. Everyone has an individual score.</p>
 
 	<label>
 		Tournament name
@@ -112,30 +120,14 @@
 	</label>
 
 	<fieldset>
-		<legend>Play as</legend>
-		<label class="choice">
-			<input type="radio" bind:group={entryMode} value="individual" />
-			Individuals
-		</label>
-		<label class="choice">
-			<input type="radio" bind:group={entryMode} value="teams" />
-			Fixed pairs
-		</label>
+		<legend>Pairing format</legend>
+		<label class="choice"><input type="radio" bind:group={pairingFormat} value="mexicano" />Mexicano</label>
+		<p class="hint">Matches are based on current standings, bringing similarly ranked players together. Fixed partners stay together.</p>
+		<label class="choice"><input type="radio" bind:group={pairingFormat} value="americano" />Americano</label>
+		<p class="hint">Partners rotate to minimize repeated partnerships, regardless of standings. Fixed partners stay together.</p>
 	</fieldset>
 
-	<fieldset>
-		<legend>{entryMode === 'teams' ? 'Matchmaking' : 'Pairing format'}</legend>
-		<label class="choice">
-			<input type="radio" bind:group={pairingFormat} value="mexicano" />
-			{entryMode === 'teams' ? 'Rank-based' : 'Mexicano'}
-		</label>
-		<label class="choice">
-			<input type="radio" bind:group={pairingFormat} value="americano" />
-			{entryMode === 'teams' ? 'Rotation' : 'Americano'}
-		</label>
-	</fieldset>
-
-	{#if pairingFormat === 'mexicano' && entryMode === 'individual'}
+	{#if pairingFormat === 'mexicano'}
 		<fieldset>
 			<legend>Team pairing (also the final round's default)</legend>
 			<label class="choice">
@@ -194,8 +186,23 @@
 		</div>
 	{/if}
 
-	<ZoeziImport players={lineup} bind:staged={zoeziImport} />
+	<ZoeziImport players={basePlayers} bind:staged={zoeziImport} />
 
+	<fieldset>
+		<legend>Players and fixed partners</legend>
+		<p class="hint">Tap two players to keep them together. Everyone else rotates partners.</p>
+		<label>Player name<input bind:value={newName} /></label>
+		<button type="button" onclick={add} disabled={!newName.trim()}>Add player</button>
+		{#each validPairs as pair}
+			<button type="button" onclick={() => pairs = pairs.filter(p => p !== pair)}>{pair.map(id => players.find(p => p.id === id)!.name).join(' & ')} · Unpair</button>
+		{/each}
+		{#each players.filter(p => !validPairs.some(pair => pair.includes(p.id))) as player (player.id)}
+			<div class="row">
+				<button type="button" aria-pressed={selected === player.id} onclick={() => pick(player.id)}>{player.name}{selected === player.id ? ' · Choose partner' : ''}</button>
+				<button type="button" aria-label="Remove {player.name}" onclick={() => { removed = [...removed, player.id]; selected = ''; }}>✕</button>
+			</div>
+		{/each}
+	</fieldset>
 	<div class="share">
 		<button type="button" class="secondary" onclick={copyLink}>
 			{linkCopied ? 'Link copied ✓' : 'Copy setup link'}

@@ -31,6 +31,7 @@ export const SETUP_DEFAULTS: SetupConfig = {
 export interface ParsedSetupLink {
 	config: Partial<SetupConfig>;
 	players: string[];
+	pairs: [string, string][];
 }
 
 const oneOf = <T extends string>(value: string | null, options: readonly T[]): T | undefined =>
@@ -79,14 +80,26 @@ export function parseSetupLink(search: string): ParsedSetupLink {
 	const style = oneOf(params.get('style'), ['standard', 'alternate'] as const);
 	if (style) config.pairingStyle = style;
 
-	return { config, players: cleanNames(params.getAll('player').concat((params.get('players') ?? '').split(','))) };
+	const players = cleanNames(params.getAll('player').concat((params.get('players') ?? '').split(',')));
+	const paired = new Set<string>();
+	const pairs: [string, string][] = [];
+	for (const raw of params.getAll('pair')) {
+		try {
+			const pair = JSON.parse(raw);
+			if (!Array.isArray(pair) || pair.length !== 2 || pair[0] === pair[1] ||
+				!pair.every(name => typeof name === 'string' && players.includes(name) && !paired.has(name))) continue;
+			pairs.push(pair as [string, string]);
+			pair.forEach(name => paired.add(name));
+		} catch { continue; }
+	}
+	return { config, players, pairs };
 }
 
 /**
  * Builds a link that recreates a setup on another device. Values equal to the defaults are
  * left out so the URL (often pasted into a shortener) stays small.
  */
-export function buildSetupLink(pageUrl: string, config: SetupConfig, playerNames: string[]): string {
+export function buildSetupLink(pageUrl: string, config: SetupConfig, playerNames: string[], pairs: [string, string][] = []): string {
 	const url = new URL(pageUrl);
 	url.search = '';
 	url.hash = '';
@@ -102,5 +115,6 @@ export function buildSetupLink(pageUrl: string, config: SetupConfig, playerNames
 	set('style', config.pairingStyle, SETUP_DEFAULTS.pairingStyle);
 	const names = cleanNames(playerNames);
 	if (names.length) url.searchParams.set('players', names.join(','));
+	for (const pair of pairs) url.searchParams.append('pair', JSON.stringify(pair));
 	return url.toString();
 }

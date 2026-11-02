@@ -45,3 +45,11 @@ describe('buildSetupLink', () => {
 		expect(parsed.players).toEqual(['Martin', 'Åsa Lindahl']);
 	});
 });
+
+test('setup links preserve optional fixed pairs alongside rotating players', () => {
+ const url = buildSetupLink(page, SETUP_DEFAULTS, ['Anna', 'Bo', 'Calle'], [['Anna', 'Bo']]);
+ const parsed = parseSetupLink(new URL(url).search);
+ expect(parsed.players).toEqual(['Anna', 'Bo', 'Calle']);
+ expect(parsed.pairs).toEqual([['Anna', 'Bo']]);
+ expect(parseSetupLink('?players=Anna,Bo&pair=invalid&pair=%5B%22Anna%22,%22Missing%22%5D').pairs).toEqual([]);
+});

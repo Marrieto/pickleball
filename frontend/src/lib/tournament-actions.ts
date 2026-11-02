@@ -1,3 +1,4 @@
+import { generateMixedRound } from './mixed-pairing';
 import { computePartnerCounts, generateFinalRoundPlan, generateRound } from './pairing';
 import {
 	computeOpponentCounts,
@@ -253,7 +254,10 @@ export function generateNextRound(state: TournamentActionsState): TournamentActi
 
 	const standings = activeStandings(state);
 	const partnerCounts = computePartnerCounts(roundHistory);
-	const plan = generateRound(standings, tournament.courtCount, {
+	const generator = tournament.teams.some(t => t.active)
+		? (s: Standing[], c: number, o: Parameters<typeof generateRound>[2]) => generateMixedRound(s, c, tournament.teams, o)
+		: generateRound;
+	const plan = generator(standings, tournament.courtCount, {
 		format: tournament.settings.pairingFormat,
 		partnerCounts,
 		pairingStyle: tournament.settings.pairingStyle,
@@ -281,7 +285,9 @@ export function generateFinalRound(
 	}
 
 	const standings = activeStandings(state);
-	const plan = generateFinalRoundPlan(standings, state.tournament.courtCount, pairingStyle);
+	const plan = state.tournament.teams.some(t => t.active)
+		? generateMixedRound(standings, state.tournament.courtCount, state.tournament.teams, { pairingStyle }, true)
+		: generateFinalRoundPlan(standings, state.tournament.courtCount, pairingStyle);
 	return appendRound(state, plan, true);
 }
 
@@ -366,6 +372,13 @@ export function editRoundAssignment(
 			c.court === court ? { ...c, teamA, teamB, ...(teamIds ?? {}) } : c
 		)
 	};
+	if (!isTeamMode(state.tournament)) {
+		for (const team of state.tournament.teams.filter(t => t.active)) {
+			const sides = updatedRound.courts.flatMap(c => [c.teamA, c.teamB]);
+			if (sides.some(side => team.playerIds.some(id => side.includes(id))) &&
+				!sides.some(side => team.playerIds.every(id => side.includes(id)))) return state;
+		}
+	}
 
 	return { ...state, rounds: { ...state.rounds, [roundId]: updatedRound } };
 }
