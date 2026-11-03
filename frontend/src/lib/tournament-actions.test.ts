@@ -9,6 +9,7 @@ import {
 	generateNextRound,
 	goToRound,
 	recordScore,
+	redrawLatestRound,
 	removePlayer,
 	renameTeam,
 	setCourtLabel,
@@ -508,5 +509,69 @@ describe('teams mode - round generation', () => {
 		expect(updated.teamAId).toBe(courtTwo.teamAId);
 		expect(updated.teamA).toEqual(courtTwo.teamA);
 		expect(updated.teamBId).toBe(courtOne.teamBId);
+	});
+});
+
+describe('fixed partners formed mid-round', () => {
+	function splitPair(): { state: TournamentActionsState; pair: [string, string] } {
+		let state = generateNextRound(withPlayers(8, 2));
+		const court = state.rounds[state.tournament.roundIds[0]].courts[0];
+		const pair: [string, string] = [court.teamA[0], court.teamB[0]];
+		state = { ...state, tournament: createTeam(state.tournament, ...pair) };
+		return { state, pair };
+	}
+	const together = (state: TournamentActionsState, [a, b]: [string, string]) =>
+		state.rounds[state.tournament.roundIds.at(-1)!].courts.some((c) =>
+			[c.teamA, c.teamB].some((side) => side.includes(a) && side.includes(b))
+		);
+
+	test('redrawing an unscored round puts the new partners on the same team', () => {
+		const { state, pair } = splitPair();
+		const redrawn = redrawLatestRound(state);
+
+		expect(redrawn.tournament.roundIds).toHaveLength(1);
+		expect(redrawn.tournament.roundIds[0]).not.toBe(state.tournament.roundIds[0]);
+		expect(redrawn.rounds[state.tournament.roundIds[0]]).toBeUndefined();
+		expect(together(redrawn, pair)).toBe(true);
+	});
+
+	test('redraw is refused once a score is recorded', () => {
+		const { state } = splitPair();
+		const scored = recordScore(state, state.tournament.roundIds[0], 1, 8, 3);
+		expect(redrawLatestRound(scored)).toBe(scored);
+	});
+
+	test('redraw keeps sit-outs chosen for the next round pending', () => {
+		const { state } = splitPair();
+		const benchedId = state.tournament.players[7].id;
+		const benched = { ...state, tournament: togglePendingBench(state.tournament, benchedId) };
+		const redrawn = redrawLatestRound(benched);
+		expect(redrawn.tournament.pendingBenchIds).toEqual([benchedId]);
+	});
+
+	test('matchups can still be edited while the new pair is split, including reuniting them', () => {
+		const { state, pair } = splitPair();
+		const roundId = state.tournament.roundIds[0];
+		const court = state.rounds[roundId].courts[0];
+		const reunited = editRoundAssignment(
+			state,
+			roundId,
+			1,
+			[pair[0], pair[1]],
+			[court.teamA[1], court.teamB[1]]
+		);
+		expect(together(reunited, pair)).toBe(true);
+	});
+
+	test('an edit may not split partners who are together', () => {
+		let state = withPlayers(8, 2);
+		const [a, b] = state.tournament.players.map((p) => p.id);
+		state = generateNextRound({ ...state, tournament: createTeam(state.tournament, a, b) });
+		const roundId = state.tournament.roundIds[0];
+		const court = state.rounds[roundId].courts.find((c) => c.teamA.includes(a) || c.teamB.includes(a))!;
+		const [own, other] = court.teamA.includes(a) ? [court.teamA, court.teamB] : [court.teamB, court.teamA];
+		const split = editRoundAssignment(state, roundId, court.court, [a, other[0]], [b, other[1]]);
+		expect(split).toBe(state);
+		expect(own).toContain(b);
 	});
 });

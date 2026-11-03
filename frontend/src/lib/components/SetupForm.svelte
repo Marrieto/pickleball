@@ -3,11 +3,12 @@
 	import { tournamentStore } from '$lib/tournament-store.svelte';
 	import ThemeToggle from './ThemeToggle.svelte';
 	import ZoeziImport from './ZoeziImport.svelte';
+	import PartnerList from './PartnerList.svelte';
 	import { onMount, type ComponentProps } from 'svelte';
 	import { applyImport } from '$lib/zoezi/import';
 	import { createTournament } from '$lib/tournament-actions';
 	import { makeId } from '$lib/id';
-	import { SCORE_DEFAULTS, SETUP_DEFAULTS, buildSetupLink, parseSetupLink } from '$lib/setup-link';
+	import { MAX_COURTS, SCORE_DEFAULTS, SETUP_DEFAULTS, buildSetupLink, parseSetupLink } from '$lib/setup-link';
 	import type { PairingFormat, PairingStyle, Player, ScoringMode } from '$lib/types';
 
 	let name = $state(SETUP_DEFAULTS.name);
@@ -24,16 +25,33 @@
 	let removed = $state<string[]>([]);
 	let zoeziImport = $state<ComponentProps<typeof ZoeziImport>['staged']>(null);
 	let newName = $state('');
-	let selected = $state('');
 	let pairs = $state<[string, string][]>([]);
 	let basePlayers = $derived([...lineup, ...added].filter(p => !removed.includes(p.id)));
-	let players = $derived(zoeziImport ? applyImport({ ...createTournament('', 1, 11), players: basePlayers }, zoeziImport.data, zoeziImport.choices, 0).players : basePlayers);
+	// applyImport mints a fresh id for every added participant each time it runs; pin them per
+	// member so pairs and removals made before starting survive the list being recomputed.
+	const stagedIds = new Map<number, string>();
+	let players = $derived.by(() => {
+		if (!zoeziImport) return basePlayers;
+		const known = new Set(basePlayers.map(p => p.id));
+		return applyImport({ ...createTournament('', 1, 11), players: basePlayers }, zoeziImport.data, zoeziImport.choices, 0).players
+			.map(p => {
+				if (!p.zoezi || known.has(p.id)) return p;
+				if (!stagedIds.has(p.zoezi.memberId)) stagedIds.set(p.zoezi.memberId, p.id);
+				return { ...p, id: stagedIds.get(p.zoezi.memberId)! };
+			})
+			.filter(p => !removed.includes(p.id));
+	});
 	let validPairs = $derived(pairs.filter(pair => pair.every(id => players.some(p => p.id === id))));
-	function pick(id: string) {
-		if (selected === id) selected = '';
-		else if (selected && players.some(p => p.id === selected)) { pairs = [...validPairs, [selected, id]]; selected = ''; }
-		else selected = id;
-	}
+	let pairList = $derived(validPairs.map(pair => ({ id: pair.join('|'), playerIds: pair })));
+	let scoreLimits = $derived(SCORE_DEFAULTS[scoringMode]);
+	let formatHelp = $derived(pairingFormat === 'mexicano'
+		? 'Matches are based on current standings, bringing similarly ranked players together. Fixed partners stay together.'
+		: 'Partners rotate to minimize repeated partnerships, regardless of standings. Fixed partners stay together.');
+	let rulesSummary = $derived([
+		pairingFormat === 'mexicano' ? (pairingStyle === 'standard' ? 'Standard pairing' : 'Alternate pairing') : null,
+		scoringMode === 'bestOf' ? `Best of ${targetScore}, points split` : `First to ${targetScore}`
+	].filter(Boolean).join(' · '));
+	const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 	function add() {
 		if (!newName.trim()) return;
 		added = [...added, { id: makeId(), name: newName.trim(), active: true, startingPoints: 0 }];
@@ -99,131 +117,151 @@
 	}
 </script>
 
-<form class="card setup" onsubmit={submit}>
-	<img
-		class="logo"
-		src="{base}/branding/club-{tournamentStore.darkMode ? 'negative' : 'positive'}.svg"
-		alt="Kalmar Pickleballklubb"
-		width="276"
-		height="122"
-	/>
-	<div class="brand">
-		<h1>Dink City</h1>
-		<ThemeToggle />
-	</div>
-	<p class="hint">Choose a format and optionally keep selected partners together. Everyone has an individual score.</p>
-
-	<label>
-		Tournament name
-		<input bind:value={name} required />
-	</label>
-
-	<fieldset>
-		<legend>Pairing format</legend>
-		<label class="choice"><input type="radio" bind:group={pairingFormat} value="mexicano" />Mexicano</label>
-		<p class="hint">Matches are based on current standings, bringing similarly ranked players together. Fixed partners stay together.</p>
-		<label class="choice"><input type="radio" bind:group={pairingFormat} value="americano" />Americano</label>
-		<p class="hint">Partners rotate to minimize repeated partnerships, regardless of standings. Fixed partners stay together.</p>
-	</fieldset>
-
-	{#if pairingFormat === 'mexicano'}
-		<fieldset>
-			<legend>Team pairing (also the final round's default)</legend>
-			<label class="choice">
-				<input type="radio" bind:group={pairingStyle} value="standard" />
-				Standard (1st+4th vs 2nd+3rd)
-			</label>
-			<label class="choice">
-				<input type="radio" bind:group={pairingStyle} value="alternate" />
-				Alternate (1st+3rd vs 2nd+4th)
-			</label>
-		</fieldset>
-	{/if}
-
-	<fieldset>
-		<legend>Scoring</legend>
-		<label class="choice">
-			<input
-				type="radio"
-				checked={scoringMode === 'firstTo'}
-				onchange={() => onScoringModeChange('firstTo')}
-			/>
-			First to X
-		</label>
-		<label class="choice">
-			<input
-				type="radio"
-				checked={scoringMode === 'bestOf'}
-				onchange={() => onScoringModeChange('bestOf')}
-			/>
-			Best of X (points split between teams)
-		</label>
-	</fieldset>
-
-	<div class="row">
-		<label>
-			Courts
-			<input type="number" min="1" max="12" bind:value={courtCount} required />
-		</label>
-		<label>
-			{scoringMode === 'bestOf' ? 'Points per match' : 'Target score'}
-			<input
-				type="number"
-				min={SCORE_DEFAULTS[scoringMode].min}
-				max={SCORE_DEFAULTS[scoringMode].max}
-				bind:value={targetScore}
-				required
-			/>
-		</label>
-	</div>
-
-	{#if linkPlayers}
-		<div class="link-players">
-			<strong>Players from link ({linkPlayers.length})</strong>
-			<p>{linkPlayers.map((player) => player.name).join(', ')}</p>
-			<button type="button" class="link" onclick={() => (linkPlayers = null)}>Clear</button>
+<form class="setup" onsubmit={submit}>
+	<header class="intro">
+		<img
+			class="logo"
+			src="{base}/branding/club-{tournamentStore.darkMode ? 'negative' : 'positive'}.svg"
+			alt="Kalmar Pickleballklubb"
+			width="276"
+			height="122"
+		/>
+		<div class="brand">
+			<h1>Dink City</h1>
+			<ThemeToggle />
 		</div>
-	{/if}
+		<p class="hint">Choose a format and optionally keep selected partners together. Everyone has an individual score.</p>
+	</header>
 
-	<ZoeziImport players={basePlayers} bind:staged={zoeziImport} />
+	<section class="card">
+		<label>
+			Tournament name
+			<input bind:value={name} required />
+		</label>
 
-	<fieldset>
-		<legend>Players and fixed partners</legend>
-		<p class="hint">Tap two players to keep them together. Everyone else rotates partners.</p>
-		<label>Player name<input bind:value={newName} /></label>
-		<button type="button" onclick={add} disabled={!newName.trim()}>Add player</button>
-		{#each validPairs as pair}
-			<button type="button" onclick={() => pairs = pairs.filter(p => p !== pair)}>{pair.map(id => players.find(p => p.id === id)!.name).join(' & ')} · Unpair</button>
-		{/each}
-		{#each players.filter(p => !validPairs.some(pair => pair.includes(p.id))) as player (player.id)}
-			<div class="row">
-				<button type="button" aria-pressed={selected === player.id} onclick={() => pick(player.id)}>{player.name}{selected === player.id ? ' · Choose partner' : ''}</button>
-				<button type="button" aria-label="Remove {player.name}" onclick={() => { removed = [...removed, player.id]; selected = ''; }}>✕</button>
+		<div class="field">
+			<span class="field-label" id="format-label">Pairing format</span>
+			<div class="segmented" role="radiogroup" aria-labelledby="format-label">
+				<label><input type="radio" bind:group={pairingFormat} value="mexicano" /><span>Mexicano</span></label>
+				<label><input type="radio" bind:group={pairingFormat} value="americano" /><span>Americano</span></label>
 			</div>
-		{/each}
-	</fieldset>
-	<div class="share">
-		<button type="button" class="secondary" onclick={copyLink}>
-			{linkCopied ? 'Link copied ✓' : 'Copy setup link'}
-		</button>
-		{#if linkText}
-			<input readonly value={linkText} aria-label="Setup link" onfocus={(e) => e.currentTarget.select()} />
-		{/if}
-		<p class="hint">Opens this setup, players included, on any device.</p>
-	</div>
+			<p class="hint">{formatHelp}</p>
+		</div>
 
-	<button type="submit" class="primary">Start tournament</button>
+		<div class="steppers">
+			<div class="field">
+				<label class="field-label" for="court-count">Courts</label>
+				<div class="stepper">
+					<button type="button" aria-label="Fewer courts" disabled={courtCount <= 1} onclick={() => (courtCount = clamp(courtCount - 1, 1, MAX_COURTS))}>−</button>
+					<input id="court-count" type="number" min="1" max={MAX_COURTS} bind:value={courtCount} required />
+					<button type="button" aria-label="More courts" disabled={courtCount >= MAX_COURTS} onclick={() => (courtCount = clamp(courtCount + 1, 1, MAX_COURTS))}>+</button>
+				</div>
+			</div>
+			<div class="field">
+				<label class="field-label" for="target-score">{scoringMode === 'bestOf' ? 'Points per match' : 'Target score'}</label>
+				<div class="stepper">
+					<button type="button" aria-label="Fewer points" disabled={targetScore <= scoreLimits.min} onclick={() => (targetScore = clamp(targetScore - 1, scoreLimits.min, scoreLimits.max))}>−</button>
+					<input id="target-score" type="number" min={scoreLimits.min} max={scoreLimits.max} bind:value={targetScore} required />
+					<button type="button" aria-label="More points" disabled={targetScore >= scoreLimits.max} onclick={() => (targetScore = clamp(targetScore + 1, scoreLimits.min, scoreLimits.max))}>+</button>
+				</div>
+			</div>
+		</div>
+
+		<details class="rules">
+			<summary><span class="summary-text">{rulesSummary}</span><span class="change">Change</span></summary>
+			<div class="rules-body">
+				<fieldset>
+					<legend>Scoring</legend>
+					<label class="choice">
+						<input type="radio" checked={scoringMode === 'firstTo'} onchange={() => onScoringModeChange('firstTo')} />
+						<span>First to X</span>
+					</label>
+					<label class="choice">
+						<input type="radio" checked={scoringMode === 'bestOf'} onchange={() => onScoringModeChange('bestOf')} />
+						<span>Best of X <small>points split between teams</small></span>
+					</label>
+				</fieldset>
+				{#if pairingFormat === 'mexicano'}
+					<fieldset>
+						<legend>Team pairing (also the final round's default)</legend>
+						<label class="choice">
+							<input type="radio" bind:group={pairingStyle} value="standard" />
+							<span>Standard <small>1st + 4th vs 2nd + 3rd</small></span>
+						</label>
+						<label class="choice">
+							<input type="radio" bind:group={pairingStyle} value="alternate" />
+							<span>Alternate <small>1st + 3rd vs 2nd + 4th</small></span>
+						</label>
+					</fieldset>
+				{/if}
+			</div>
+		</details>
+	</section>
+
+	<section class="card">
+		<h2>Players · {players.length}</h2>
+
+		{#if linkPlayers}
+			<div class="link-players">
+				<strong>Players from link ({linkPlayers.length})</strong>
+				<p>{linkPlayers.map((player) => player.name).join(', ')}</p>
+				<button type="button" class="link" onclick={() => (linkPlayers = null)}>Clear</button>
+			</div>
+		{/if}
+
+		<ZoeziImport players={basePlayers} bind:staged={zoeziImport} />
+
+		<div class="add-row">
+			<input
+				placeholder="Add player name"
+				aria-label="Player name"
+				bind:value={newName}
+				onkeydown={(e) => {
+					if (e.key === 'Enter') {
+						e.preventDefault();
+						add();
+					}
+				}}
+			/>
+			<button type="button" onclick={add} disabled={!newName.trim()}>Add</button>
+		</div>
+
+		<PartnerList
+			{players}
+			pairs={pairList}
+			onpair={(a, b) => (pairs = [...validPairs, [a, b]])}
+			onunpair={(id) => (pairs = validPairs.filter((pair) => pair.join('|') !== id))}
+			onremove={(id) => (removed = [...removed, id])}
+		/>
+	</section>
+
+	<div class="actions">
+		<button type="submit" class="primary">Start tournament</button>
+		<div class="share">
+			<button type="button" class="secondary" onclick={copyLink}>
+				{linkCopied ? 'Link copied ✓' : '🔗 Copy setup link'}
+			</button>
+			{#if linkText}
+				<input readonly value={linkText} aria-label="Setup link" onfocus={(e) => e.currentTarget.select()} />
+			{/if}
+			<p class="hint">Opens this setup, players included, on any device.</p>
+		</div>
+	</div>
 </form>
 
 <style>
 	.setup {
-		width: min(26.25rem, calc(100% - 1.5rem));
-		margin: 1rem auto;
-		margin: clamp(1rem, 8svh, 4rem) auto 1rem;
-		padding: clamp(1rem, 4vw, 2rem);
+		width: min(28rem, calc(100% - 1.5rem));
+		margin: clamp(1rem, 6svh, 3rem) auto 2rem;
 		display: flex;
 		flex-direction: column;
-		gap: 1.25rem;
+		gap: 1rem;
+	}
+	.intro {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+		padding: 0 0.25rem;
 	}
 	.brand {
 		display: flex;
@@ -241,44 +279,31 @@
 	h1 {
 		font-size: 1.5rem;
 	}
+	h2 {
+		font-size: 1rem;
+	}
+	.card {
+		padding: clamp(1rem, 4vw, 1.5rem);
+		display: flex;
+		flex-direction: column;
+		gap: 1.1rem;
+	}
 	.hint {
 		margin: 0;
 		color: var(--text-muted);
 		font-size: 0.875rem;
 	}
-	label {
+	label,
+	.field {
 		display: flex;
 		flex-direction: column;
 		gap: 0.35rem;
 		font-size: 0.875rem;
 		color: var(--text-muted);
 	}
-	.row {
-		display: flex;
-		gap: 1rem;
-	}
-	.row label {
-		flex: 1;
-		min-width: 0;
-	}
-	fieldset {
-		border: 1px solid var(--border);
-		border-radius: 10px;
-		padding: 0.75rem;
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.75rem 1.25rem;
-	}
-	legend {
-		padding: 0 0.35rem;
-		font-size: 0.8rem;
+	.field-label {
+		font-size: 0.875rem;
 		color: var(--text-muted);
-	}
-	.choice {
-		flex-direction: row !important;
-		align-items: center;
-		gap: 0.4rem !important;
-		color: var(--text);
 	}
 	input {
 		min-width: 0;
@@ -289,14 +314,162 @@
 		color: var(--text);
 		font-size: 1rem;
 	}
-	button.primary {
-		padding: 0.85rem;
+	.segmented {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 0.25rem;
+		padding: 0.25rem;
+		border: 1px solid var(--border);
+		border-radius: 12px;
+		background: var(--bg);
+	}
+	.segmented label {
+		flex-direction: row;
+		position: relative;
+	}
+	.segmented input {
+		position: absolute;
+		opacity: 0;
+		pointer-events: none;
+	}
+	.segmented span {
+		flex: 1;
+		padding: 0.55rem;
+		border-radius: 9px;
+		text-align: center;
+		font-weight: 600;
+		color: var(--text-muted);
+		cursor: pointer;
+		transition: background-color 150ms ease, color 150ms ease;
+	}
+	.segmented input:checked + span {
+		background: var(--primary);
+		color: var(--primary-contrast);
+	}
+	.segmented input:focus-visible + span {
+		outline: 2px solid var(--primary);
+		outline-offset: 2px;
+	}
+	.steppers {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 0.75rem;
+	}
+	.stepper {
+		display: grid;
+		grid-template-columns: 2.75rem minmax(0, 1fr) 2.75rem;
+		align-items: stretch;
+		border: 1px solid var(--border);
+		border-radius: 10px;
+		background: var(--bg);
+		overflow: hidden;
+	}
+	.stepper button {
+		border: none;
+		background: transparent;
+		color: var(--text);
+		font-size: 1.25rem;
+		min-height: 2.75rem;
+	}
+	.stepper button:disabled {
+		opacity: 0.35;
+	}
+	.stepper button:not(:disabled):hover {
+		box-shadow: none;
+		background: color-mix(in srgb, var(--primary) 10%, transparent);
+	}
+	.stepper input {
+		border: none;
+		border-radius: 0;
+		background: transparent;
+		text-align: center;
+		font-weight: 600;
+		font-variant-numeric: tabular-nums;
+		appearance: textfield;
+		-moz-appearance: textfield;
+	}
+	.stepper input::-webkit-inner-spin-button,
+	.stepper input::-webkit-outer-spin-button {
+		-webkit-appearance: none;
+		margin: 0;
+	}
+	.rules {
+		border-top: 1px solid color-mix(in srgb, var(--border) 45%, transparent);
+		padding-top: 0.85rem;
+	}
+	.rules summary {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		cursor: pointer;
+		list-style: none;
+		font-size: 0.875rem;
+		color: var(--text-muted);
+	}
+	.rules summary::-webkit-details-marker {
+		display: none;
+	}
+	.summary-text {
+		flex: 1;
+		min-width: 0;
+	}
+	.change {
+		color: var(--primary);
+		font-weight: 600;
+	}
+	.rules[open] .change {
+		visibility: hidden;
+	}
+	.rules-body {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+		margin-top: 0.75rem;
+	}
+	fieldset {
+		border: 1px solid var(--border);
+		border-radius: 10px;
+		padding: 0.75rem;
+		margin: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.6rem;
+	}
+	legend {
+		padding: 0 0.35rem;
+		font-size: 0.8rem;
+		color: var(--text-muted);
+	}
+	.choice {
+		flex-direction: row;
+		align-items: center;
+		gap: 0.5rem;
+		color: var(--text);
+		font-size: 1rem;
+		cursor: pointer;
+	}
+	.choice small {
+		margin-left: 0.25rem;
+		color: var(--text-muted);
+		font-size: 0.8rem;
+	}
+	.add-row {
+		display: flex;
+		gap: 0.5rem;
+	}
+	.add-row input {
+		flex: 1;
+	}
+	.add-row button {
+		padding: 0.55rem 1.1rem;
 		border-radius: 10px;
 		border: none;
 		background: var(--primary);
 		color: var(--primary-contrast);
 		font-weight: 600;
-		font-size: 1rem;
+	}
+	.add-row button:disabled {
+		opacity: 0.5;
 	}
 	.link-players {
 		display: grid;
@@ -319,22 +492,32 @@
 		color: var(--primary);
 		text-decoration: underline;
 	}
+	.actions {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+	}
+	button.primary {
+		min-height: 3.25rem;
+		padding: 0.85rem;
+		border-radius: 10px;
+		border: none;
+		background: var(--primary);
+		color: var(--primary-contrast);
+		font-weight: 600;
+		font-size: 1.05rem;
+	}
 	.share {
 		display: grid;
 		gap: 0.5rem;
 	}
 	.share .hint {
-		margin: 0;
+		text-align: center;
 		font-size: 0.75rem;
-		color: var(--text-muted);
 	}
 	.share input {
-		min-width: 0;
 		padding: 0.5rem 0.65rem;
 		border-radius: 8px;
-		border: 1px solid var(--border);
-		background: var(--bg);
-		color: var(--text);
 		font-size: 0.75rem;
 	}
 	button.secondary {

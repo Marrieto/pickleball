@@ -20,9 +20,9 @@ export interface SetupConfig {
 
 export const SETUP_DEFAULTS: SetupConfig = {
 	name: 'Pickleball Night',
-	courtCount: 2,
-	targetScore: SCORE_DEFAULTS.firstTo.default,
-	scoringMode: 'firstTo',
+	courtCount: 3,
+	targetScore: SCORE_DEFAULTS.bestOf.default,
+	scoringMode: 'bestOf',
 	entryMode: 'individual',
 	pairingFormat: 'mexicano',
 	pairingStyle: 'standard'

@@ -11,6 +11,7 @@ import {
 	generateNextRound as generateNextRoundAction,
 	goToRound as goToRoundAction,
 	recordScore as recordScoreAction,
+	redrawLatestRound as redrawLatestRoundAction,
 	removePlayer as removePlayerAction,
 	renameTeam as renameTeamAction,
 	setCourtLabel as setCourtLabelAction,
@@ -133,6 +134,11 @@ export class TournamentStore {
 	get teams(): Team[] {
 		const t = this.tournament;
 		return t ? playableTeams(t.players, t.teams) : [];
+	}
+
+	/** Fixed partners in individual mode: the teams the mixed pairing keeps together. */
+	get fixedPairs(): Team[] {
+		return this.isTeamMode ? [] : this.teams;
 	}
 
 	get teamValidation(): TeamValidation {
@@ -372,6 +378,13 @@ export class TournamentStore {
 			teamB,
 			teamIds
 		);
+		this.apply(result, t.roundIds);
+	}
+
+	redrawLatestRound() {
+		const t = this.tournament;
+		if (!t) return;
+		const result = redrawLatestRoundAction({ tournament: t, rounds: this.collectRounds(t) });
 		this.apply(result, t.roundIds);
 	}
 

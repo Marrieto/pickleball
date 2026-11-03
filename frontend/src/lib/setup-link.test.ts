@@ -20,8 +20,11 @@ describe('parseSetupLink', () => {
 		expect(parsed.players).toEqual([]);
 	});
 	test('score is validated against the scoring mode, and switching mode resets it', () => {
-		expect(parseSetupLink('?score=30').config.targetScore).toBeUndefined();
-		expect(parseSetupLink('?scoring=bestOf&score=30').config.targetScore).toBe(30);
+		// No scoring param means the default, best of: 30 fits its range, 50 doesn't.
+		expect(parseSetupLink('?score=30').config.targetScore).toBe(30);
+		expect(parseSetupLink('?score=50').config.targetScore).toBeUndefined();
+		expect(parseSetupLink('?scoring=firstTo&score=30').config.targetScore).toBe(11);
+		expect(parseSetupLink('?scoring=firstTo').config.targetScore).toBe(11);
 		expect(parseSetupLink('?scoring=bestOf').config.targetScore).toBe(21);
 	});
 });
@@ -33,7 +36,7 @@ describe('cleanNames', () => {
 });
 
 describe('buildSetupLink', () => {
-	const config: SetupConfig = { ...SETUP_DEFAULTS, name: 'Fredag', courtCount: 3, pairingFormat: 'americano' };
+	const config: SetupConfig = { ...SETUP_DEFAULTS, name: 'Fredag', courtCount: 4, pairingFormat: 'americano' };
 	test('omits defaults and round-trips through parseSetupLink', () => {
 		const link = buildSetupLink(page + '?stale=1#x', config, ['Martin', 'Åsa, Lindahl']);
 		const url = new URL(link);
@@ -41,7 +44,7 @@ describe('buildSetupLink', () => {
 		expect(url.searchParams.has('stale')).toBe(false);
 		expect(url.hash).toBe('');
 		const parsed = parseSetupLink(url.search);
-		expect(parsed.config).toMatchObject({ name: 'Fredag', courtCount: 3, pairingFormat: 'americano' });
+		expect(parsed.config).toMatchObject({ name: 'Fredag', courtCount: 4, pairingFormat: 'americano' });
 		expect(parsed.players).toEqual(['Martin', 'Åsa Lindahl']);
 	});
 });

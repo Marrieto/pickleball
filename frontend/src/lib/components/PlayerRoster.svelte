@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { tournamentStore } from '$lib/tournament-store.svelte';
 	import { buildSetupLink } from '$lib/setup-link';
+	import PartnerList from './PartnerList.svelte';
 
 	let tournament = $derived(tournamentStore.tournament!);
 	let activePlayers = $derived(tournament.players.filter((p) => p.active));
@@ -55,7 +56,10 @@
 				pairingFormat: settings.pairingFormat,
 				pairingStyle: settings.pairingStyle
 			},
-			activePlayers.map((p) => p.name)
+			activePlayers.map((p) => p.name),
+			tournamentStore.fixedPairs.map(
+				(pair) => pair.playerIds.map((id) => tournamentStore.displayName(id)) as [string, string]
+			)
 		);
 		history.replaceState(history.state, '', link);
 		try {
@@ -99,6 +103,21 @@
 		</div>
 	{/if}
 
+	{#if !tournamentStore.isTeamMode && activePlayers.length > 0}
+		<PartnerList
+			players={activePlayers}
+			pairs={tournamentStore.fixedPairs}
+			onpair={(a, b) => tournamentStore.createTeam(a, b)}
+			onunpair={(id) => tournamentStore.disbandTeam(id)}
+			onremove={(id) => tournamentStore.removePlayer(id)}
+			benched={tournament.pendingBenchIds}
+			ontogglebench={(id) => tournamentStore.togglePendingBench(id)}
+			readonly={tournamentStore.isFinalized}
+		/>
+		{#if gameInProgress && !tournamentStore.isFinalized}
+			<p class="hint">Partner and sit-out changes apply from the next round.</p>
+		{/if}
+	{:else}
 	<ul>
 		{#each activePlayers as player (player.id)}
 			<li>
@@ -131,6 +150,7 @@
 				</li>
 		{/each}
 	</ul>
+	{/if}
 
 	{#if tournamentStore.availableRoster.length > 0 && !tournamentStore.isFinalized}
 		<div class="previous">

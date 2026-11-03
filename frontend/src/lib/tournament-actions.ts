@@ -338,17 +338,38 @@ export function undoLastAction(state: TournamentActionsState): TournamentActions
 		};
 	}
 
-	const round = state.rounds[lastAction.roundId];
-	const { [lastAction.roundId]: _removed, ...remainingRounds } = state.rounds;
+	return removeRound(state, lastAction.roundId);
+}
+
+/** Drops a round and restores the bench list it was generated with. */
+function removeRound(state: TournamentActionsState, roundId: string): TournamentActionsState {
+	const round = state.rounds[roundId];
+	const { [roundId]: _removed, ...remainingRounds } = state.rounds;
 	const { lastAction: _drop, ...tournamentRest } = state.tournament;
 	return {
 		tournament: {
 			...tournamentRest,
-			roundIds: state.tournament.roundIds.filter((id) => id !== lastAction.roundId),
+			roundIds: state.tournament.roundIds.filter((id) => id !== roundId),
 			currentRoundIndex: state.tournament.roundIds.length - 2,
 			pendingBenchIds: round.benchedPlayerIds
 		} as Tournament,
 		rounds: remainingRounds
+	};
+}
+
+/** Regenerates the latest round with the current partners, e.g. after pairing players mid-round.
+ *  Only before any score is recorded. The round is redrawn with the bench it was generated with;
+ *  sit-outs toggled since then still apply to the round after. */
+export function redrawLatestRound(state: TournamentActionsState): TournamentActionsState {
+	if (hasFinalRound(state)) return state;
+	const roundId = state.tournament.roundIds.at(-1);
+	const round = roundId ? state.rounds[roundId] : undefined;
+	if (!roundId || !round || round.courts.some((c) => c.score)) return state;
+	const redrawn = generateNextRound(removeRound(state, roundId));
+	if (redrawn.tournament.roundIds.length !== state.tournament.roundIds.length) return state;
+	return {
+		...redrawn,
+		tournament: { ...redrawn.tournament, pendingBenchIds: state.tournament.pendingBenchIds }
 	};
 }
 
@@ -373,10 +394,12 @@ export function editRoundAssignment(
 		)
 	};
 	if (!isTeamMode(state.tournament)) {
-		for (const team of state.tournament.teams.filter(t => t.active)) {
-			const sides = updatedRound.courts.flatMap(c => [c.teamA, c.teamB]);
-			if (sides.some(side => team.playerIds.some(id => side.includes(id))) &&
-				!sides.some(side => team.playerIds.every(id => side.includes(id)))) return state;
+		// An edit may not split fixed partners. Pairs formed after the round was drawn may
+		// already be split - edits stay allowed then, including the one that reunites them.
+		const together = (r: Round, ids: string[]) =>
+			r.courts.some((c) => [c.teamA, c.teamB].some((side) => ids.every((id) => side.includes(id))));
+		for (const team of state.tournament.teams.filter((t) => t.active)) {
+			if (together(round, team.playerIds) && !together(updatedRound, team.playerIds)) return state;
 		}
 	}
 

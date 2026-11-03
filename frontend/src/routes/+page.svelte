@@ -9,7 +9,8 @@
 	let panel = $state<'leaderboard' | 'players' | 'teams'>('leaderboard');
 	let panelTitle = $derived.by(() => {
 		if (panel === 'players') {
-			return `Players · ${tournamentStore.tournament?.players.filter((p) => p.active).length ?? 0}`;
+			const count = tournamentStore.tournament?.players.filter((p) => p.active).length ?? 0;
+			return tournamentStore.isTeamMode ? `Players · ${count}` : `Players & partners · ${count}`;
 		}
 		if (panel === 'teams') return `Teams · ${tournamentStore.teams.length}`;
 		return 'Leaderboard';
@@ -37,7 +38,12 @@
 		<div class="column">
 			<div class="panel-tools">
 				<button onclick={() => openPanel('leaderboard')}>Leaderboard</button>
-				<button onclick={() => openPanel('players')}>Players</button>
+				<button onclick={() => openPanel('players')}>
+					Players
+					{#if tournamentStore.fixedPairs.length > 0}
+						<span class="badge" title="Fixed partners">{tournamentStore.fixedPairs.length}</span>
+					{/if}
+				</button>
 				{#if tournamentStore.isTeamMode}
 					<button class:attention={!tournamentStore.canGenerateRound} onclick={() => openPanel('teams')}>
 						Teams
@@ -103,6 +109,18 @@
 		border-radius: 10px;
 		background: var(--surface);
 		color: var(--text);
+	}
+	.badge {
+		display: inline-block;
+		min-width: 1.4em;
+		margin-left: 0.35rem;
+		padding: 0 0.4em;
+		border-radius: 999px;
+		background: var(--primary);
+		color: var(--primary-contrast);
+		font-size: 0.75em;
+		font-weight: 600;
+		line-height: 1.5;
 	}
 	/* Flags that teams need fixing before a round can be generated. */
 	button.attention {

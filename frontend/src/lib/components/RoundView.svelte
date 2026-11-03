@@ -27,6 +27,23 @@
 		return null;
 	}
 
+	/** Fixed pairs formed after this round was drawn, and so not yet on the same side. */
+	let splitPairs = $derived.by(() => {
+		if (isTeamMode || !round || !isLatest || round.isFinal || tournamentStore.isFinalized) return [];
+		const sideOf = new Map<string, string>();
+		for (const c of round.courts) {
+			for (const id of c.teamA) sideOf.set(id, `${c.court}A`);
+			for (const id of c.teamB) sideOf.set(id, `${c.court}B`);
+		}
+		return tournamentStore.fixedPairs.filter(({ playerIds: [a, b] }) => sideOf.get(a) !== sideOf.get(b));
+	});
+
+	function redraw() {
+		editing = false;
+		selected = null;
+		tournamentStore.redrawLatestRound();
+	}
+
 	let editing = $state(false);
 	let selected = $state<string | null>(null);
 
@@ -234,6 +251,19 @@
 			<p class="sitting-out">Sitting out: {round.sittingOut.map((id) => tournamentStore.displayName(id)).join(', ')}</p>
 		{/if}
 
+		{#if splitPairs.length > 0}
+			<div class="new-partners" role="status">
+				<p>
+					<strong>New partners ·</strong>
+					{splitPairs.map((pair) => tournamentStore.displayName(pair.id)).join(', ')}
+					{isLocked ? 'play together from the next round.' : "aren't on the same team this round."}
+				</p>
+				{#if !isLocked}
+					<button class="primary" onclick={redraw}>Redraw round {round.roundNumber} now</button>
+				{/if}
+			</div>
+		{/if}
+
 		{#key round.id}
 		<div class="courts">
 			{#each round.courts as match (round.id + '-' + match.court)}
@@ -337,6 +367,25 @@
 		color: var(--danger);
 		font-size: 0.8rem;
 		text-align: center;
+	}
+	.new-partners {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.6rem;
+		padding: 0.75rem 0.9rem;
+		border: 1px solid var(--warning);
+		border-radius: 10px;
+		background: var(--surface);
+		font-size: 0.875rem;
+		text-align: center;
+	}
+	.new-partners p {
+		margin: 0;
+		overflow-wrap: anywhere;
+	}
+	.new-partners strong {
+		color: var(--warning);
 	}
 	.picker-hint {
 		margin: 0;
